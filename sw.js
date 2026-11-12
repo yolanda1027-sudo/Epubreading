@@ -1,5 +1,5 @@
 // 墨頁閱讀器的離線快取。改了網站檔案之後把版本號加一，舊快取就會被換掉。
-const VERSION = 'moye-v3';
+const VERSION = 'moye-v4';
 const SHARED = 'moye-shared';
 const SHELL = [
   './',
