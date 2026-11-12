@@ -1,0 +1,68 @@
+name: Build APK
+
+# main 有更新就重新打包一份 APK，放到 Releases 的「最新版」。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 簽章金鑰：repo 裡有 android/moye.jks 就用它，
+      # 沒有的話改用 repo 設定裡的 MOYE_KEYSTORE_BASE64。兩個都沒有就先不打包。
+      - name: Find signing key
+        id: key
+        env:
+          MOYE_KEYSTORE_BASE64: ${{ secrets.MOYE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -f android/moye.jks ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$MOYE_KEYSTORE_BASE64" ]; then
+            printf '%s' "$MOYE_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > android/moye.jks
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::還沒有簽章金鑰，這次先不打包 APK。"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.key.outputs.found == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build
+        if: steps.key.outputs.found == 'true'
+        working-directory: android
+        run: |
+          # 版本號跟著打包次數往上加，新版才能蓋過舊版
+          export VERSION_CODE=$((GITHUB_RUN_NUMBER + 1))
+          export VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/moye-reader.apk"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.found == 'true'
+        with:
+          name: moye-reader-apk
+          path: moye-reader.apk
+
+      # 放到 Releases 頁面，手機上點一下就能下載
+      - name: Publish "最新版"
+        if: steps.key.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build moye-reader.apk \
+            --target "$GITHUB_SHA" \
+            --title "最新版 #${{ github.run_number }}" \
+            --notes "下載 moye-reader.apk 安裝即可。裝過舊版的話直接覆蓋安裝，書架和主題會保留。　commit：${{ github.sha }}"

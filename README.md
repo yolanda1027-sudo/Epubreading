@@ -40,7 +40,9 @@
 
 自己編譯：裝好 JDK 17 以上和 Android SDK，在 `android/` 裡執行 `./gradlew assembleRelease`，APK 會在 `android/app/build/outputs/apk/release/`。
 
-簽章金鑰不在 repo 裡。把金鑰檔放到 `android/moye.jks` 再編，新版才能覆蓋安裝舊版；沒有金鑰檔時會改用除錯金鑰，裝之前要先移除舊版。
+自動打包：`main` 有更新時，GitHub Actions（`.github/workflows/build.yml`）會重新打包 APK，放到 Releases 的「最新版」。它需要簽章金鑰才會動，金鑰可以放在 repo 設定的 Actions secret `MOYE_KEYSTORE_BASE64`（金鑰檔的 base64 文字）。
+
+簽章金鑰不在 repo 裡。每次都用同一把金鑰簽章，新版才能覆蓋安裝舊版；自己編譯時把金鑰檔放到 `android/moye.jks`，沒有金鑰檔時會改用除錯金鑰，裝之前要先移除舊版。
 
 ## 檔案
 
