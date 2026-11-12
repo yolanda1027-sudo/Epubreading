@@ -24,7 +24,7 @@ img{max-width:100%}
 :root{
   --bg:#e7eae5; --paper:#f7f8f5; --ui-bg:#eff1ec; --ui-fg:#272c32; --ui-border:#cfd4cc; --accent:#1f5f8b;
   --r-text:#22262b; --r-italic:#6a7078; --r-quote:#1f5f8b; --r-underline:#2f6b55; --r-heading:#14171b; --r-link:#1f5f8b;
-  --r-shadow:none;
+  --r-shadow:none; --r-quote-bg:transparent;
   --f-ui:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
   --f-display:"LXGW WenKai TC","Kaiti TC","BiauKai","DFKai-SB",serif;
   --r-font:var(--f-ui); --r-hfont:inherit; --r-size:18px; --r-lh:1.9; --r-para:.9em; --r-ls:.02em;
@@ -145,6 +145,8 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
 .crow input[type="color"]{width:40px;height:30px;padding:0;border:1px solid var(--ui-border);border-radius:6px;background:none;cursor:pointer}
 .crow input[type="text"]{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem}
 .crow input.bad{border-color:#c0392b}
+.crow.clearable{grid-template-columns:5.5em 40px minmax(0,1fr) auto}
+.crow .btn{padding:.25em .6em;font-size:.8rem}
 .srow{display:grid;grid-template-columns:5.5em minmax(0,1fr) 4.6em;gap:8px;align-items:center;margin-top:9px}
 .srow input{accent-color:var(--accent);min-width:0;width:100%}
 .srow output{font-size:.8rem;font-variant-numeric:tabular-nums;text-align:right;opacity:.8}
@@ -271,14 +273,14 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
             <option value="off">完全不用書本樣式</option>
           </select>
         </div>
-        <label class="check"><input type="checkbox" id="set-quotes"><span>引號裡的文字套用「引號」顏色（「」『』“” ""）</span></label>
+        <label class="check"><input type="checkbox" id="set-quotes"><span>引號裡的文字套用「引號」的顏色和底色（「」『』“” ""）</span></label>
         <p class="hint">分頁模式：點畫面左右兩側或按方向鍵翻頁，點中間收起／叫回工具列。</p>
       </section>
 
       <section data-pane="css" hidden>
         <textarea id="css-text" spellcheck="false" aria-label="自訂 CSS" placeholder="/* 例如 */&#10;p { text-indent: 2em; }&#10;.bk-q { font-weight: 600; }"></textarea>
         <div class="row"><button class="btn" id="css-clear">清空</button></div>
-        <p class="hint">會跟著主題一起儲存。可用的選擇器：<code>.bk-body</code> 整段內文、<code>p</code> <code>h1</code> <code>em</code> <code>blockquote</code> 等一般標籤、<code>.bk-q</code> 引號文字、<code>#topbar</code> <code>#botbar</code> <code>#panel</code> 介面。書本樣式設成「主題優先」時，蓋不過去的屬性請加 <code>!important</code>。</p>
+        <p class="hint">會跟著主題一起儲存。可用的選擇器：<code>.bk-body</code> 整段內文、<code>p</code> <code>h1</code> <code>em</code> <code>blockquote</code> 等一般標籤、<code>.bk-q</code> 引號文字（<code>.bk-q-s</code> 開頭、<code>.bk-q-e</code> 結尾）、<code>#topbar</code> <code>#botbar</code> <code>#panel</code> 介面。書本樣式設成「主題優先」時，蓋不過去的屬性請加 <code>!important</code>。</p>
       </section>
     </div>
   </aside>
@@ -375,17 +377,17 @@ const over = (fg, bg) => { const a = fg[3]; return [fg[0] * a + bg[0] * (1 - a),
 
 /* ---------- themes ---------- */
 const COLOR_FIELDS = [
-  ['bg', '背景'], ['paper', '紙張'], ['text', '主文字'], ['italic', '斜體字'], ['quote', '引號文字'], ['underline', '底線文字'],
+  ['bg', '背景'], ['paper', '紙張'], ['text', '主文字'], ['italic', '斜體字'], ['quote', '引號文字'], ['quoteBg', '引號底色'], ['underline', '底線文字'],
   ['heading', '標題'], ['link', '連結／強調'], ['uiBg', '介面底色'], ['uiText', '介面文字'], ['uiBorder', '介面邊框'], ['shadow', '文字陰影'],
 ];
 const PRESETS = [
-  { name: '宣紙', colors: { bg: '#e7eae5', paper: '#f7f8f5', text: '#22262b', italic: '#6a7078', quote: '#1f5f8b', underline: '#2f6b55', heading: '#14171b', link: '#1f5f8b', uiBg: '#eff1ec', uiText: '#272c32', uiBorder: '#cfd4cc', shadow: 'rgba(0, 0, 0, 0.25)' } },
-  { name: '夜讀', colors: { bg: '#14171c', paper: '#1b1f26', text: '#c9ced6', italic: '#8f97a3', quote: '#e0a458', underline: '#9ecbc0', heading: '#e6e9ee', link: '#7fb2e5', uiBg: '#20252d', uiText: '#c9ced6', uiBorder: '#333b47', shadow: 'rgba(0, 0, 0, 0.6)' } },
-  { name: '酒館深色', colors: { bg: '#101010', paper: '#171717', text: '#dcdcd2', italic: '#919191', quote: '#e18a24', underline: '#bce7cf', heading: '#ecece4', link: '#e18a24', uiBg: '#1c1c1c', uiText: '#dcdcd2', uiBorder: '#000000', shadow: 'rgba(0, 0, 0, 1)' } },
-  { name: '舊書頁', colors: { bg: '#ddd2b8', paper: '#ece2c9', text: '#463b2c', italic: '#85755b', quote: '#8a4a26', underline: '#5d6b3a', heading: '#33291c', link: '#7b5320', uiBg: '#e4d9bf', uiText: '#463b2c', uiBorder: '#c6b998', shadow: 'rgba(70, 59, 44, 0.3)' } },
-  { name: '豆沙綠', colors: { bg: '#b4dbb9', paper: '#c7edcc', text: '#2a382d', italic: '#5c7160', quote: '#1b6a50', underline: '#3c5f8a', heading: '#1b291e', link: '#1f6d59', uiBg: '#bde3c2', uiText: '#2a382d', uiBorder: '#9bc7a2', shadow: 'rgba(42, 56, 45, 0.3)' } },
-  { name: '櫻餅', colors: { bg: '#efdfe3', paper: '#fbf2f4', text: '#49353f', italic: '#987a87', quote: '#ad436a', underline: '#4d7a6b', heading: '#38262f', link: '#ad436a', uiBg: '#f5e7eb', uiText: '#49353f', uiBorder: '#e0c8d0', shadow: 'rgba(73, 53, 63, 0.3)' } },
-  { name: '純黑', colors: { bg: '#000000', paper: '#000000', text: '#b4b4b4', italic: '#787878', quote: '#6fb0d8', underline: '#9fc49a', heading: '#d4d4d4', link: '#6fa8dc', uiBg: '#0c0c0c', uiText: '#b4b4b4', uiBorder: '#262626', shadow: 'rgba(0, 0, 0, 1)' } },
+  { name: '宣紙', colors: { bg: '#e7eae5', paper: '#f7f8f5', text: '#22262b', italic: '#6a7078', quote: '#1f5f8b', underline: '#2f6b55', heading: '#14171b', link: '#1f5f8b', uiBg: '#eff1ec', uiText: '#272c32', uiBorder: '#cfd4cc', shadow: 'rgba(0, 0, 0, 0.25)', quoteBg: 'rgba(0, 0, 0, 0)' } },
+  { name: '夜讀', colors: { bg: '#14171c', paper: '#1b1f26', text: '#c9ced6', italic: '#8f97a3', quote: '#e0a458', underline: '#9ecbc0', heading: '#e6e9ee', link: '#7fb2e5', uiBg: '#20252d', uiText: '#c9ced6', uiBorder: '#333b47', shadow: 'rgba(0, 0, 0, 0.6)', quoteBg: 'rgba(0, 0, 0, 0)' } },
+  { name: '酒館深色', colors: { bg: '#101010', paper: '#171717', text: '#dcdcd2', italic: '#919191', quote: '#e18a24', underline: '#bce7cf', heading: '#ecece4', link: '#e18a24', uiBg: '#1c1c1c', uiText: '#dcdcd2', uiBorder: '#000000', shadow: 'rgba(0, 0, 0, 1)', quoteBg: 'rgba(0, 0, 0, 0)' } },
+  { name: '舊書頁', colors: { bg: '#ddd2b8', paper: '#ece2c9', text: '#463b2c', italic: '#85755b', quote: '#8a4a26', underline: '#5d6b3a', heading: '#33291c', link: '#7b5320', uiBg: '#e4d9bf', uiText: '#463b2c', uiBorder: '#c6b998', shadow: 'rgba(70, 59, 44, 0.3)', quoteBg: 'rgba(0, 0, 0, 0)' } },
+  { name: '豆沙綠', colors: { bg: '#b4dbb9', paper: '#c7edcc', text: '#2a382d', italic: '#5c7160', quote: '#1b6a50', underline: '#3c5f8a', heading: '#1b291e', link: '#1f6d59', uiBg: '#bde3c2', uiText: '#2a382d', uiBorder: '#9bc7a2', shadow: 'rgba(42, 56, 45, 0.3)', quoteBg: 'rgba(0, 0, 0, 0)' } },
+  { name: '櫻餅', colors: { bg: '#efdfe3', paper: '#fbf2f4', text: '#49353f', italic: '#987a87', quote: '#ad436a', underline: '#4d7a6b', heading: '#38262f', link: '#ad436a', uiBg: '#f5e7eb', uiText: '#49353f', uiBorder: '#e0c8d0', shadow: 'rgba(73, 53, 63, 0.3)', quoteBg: 'rgba(173, 67, 106, 0.13)' } },
+  { name: '純黑', colors: { bg: '#000000', paper: '#000000', text: '#b4b4b4', italic: '#787878', quote: '#6fb0d8', underline: '#9fc49a', heading: '#d4d4d4', link: '#6fa8dc', uiBg: '#0c0c0c', uiText: '#b4b4b4', uiBorder: '#262626', shadow: 'rgba(0, 0, 0, 1)', quoteBg: 'rgba(0, 0, 0, 0)' } },
 ];
 const FONTS = [
   { id: 'sans', label: '系統黑體', stack: 'system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Noto Sans CJK TC", sans-serif' },
@@ -461,6 +463,10 @@ h1{font-size:1.6em} h2{font-size:1.35em} h3{font-size:1.15em} h4,h5,h6{font-size
 em,i,cite,dfn{color:var(--r-italic)}
 u,ins{color:var(--r-underline);text-underline-offset:.2em}
 q,.bk-q{color:var(--r-quote)}
+q,.bk-q,.bk-q-in{background-color:var(--r-quote-bg)}
+:host(.qbg) :is(q,.bk-q,.bk-q-in){padding-block:.14em}
+:host(.qbg) :is(q,.bk-q-s){border-top-left-radius:.5em;border-bottom-left-radius:.5em;padding-left:.28em}
+:host(.qbg) :is(q,.bk-q-e){border-top-right-radius:.5em;border-bottom-right-radius:.5em;padding-right:.28em}
 a{color:var(--r-link);text-underline-offset:.2em;cursor:pointer}
 img,svg,video,canvas{max-width:100%;height:auto}
 hr{border:0;border-top:1px solid color-mix(in srgb,var(--r-text) 22%,transparent);margin:2em 0}
@@ -495,6 +501,7 @@ const FORCE_CSS = `
 .bk-body :is(em,i,cite,dfn){color:var(--r-italic)!important}
 .bk-body :is(u,ins){color:var(--r-underline)!important}
 .bk-body :is(q,.bk-q){color:var(--r-quote)!important}
+.bk-body :is(q,.bk-q,.bk-q-in){background-color:var(--r-quote-bg)!important}
 .bk-body a{color:var(--r-link)!important}
 .bk-body :is(.reasoning,.swipe,aside,details,pre){background-color:color-mix(in srgb,var(--r-text) 7%,transparent)!important;
   border-color:color-mix(in srgb,var(--r-text) 28%,transparent)!important}
@@ -517,13 +524,14 @@ function applyTheme() {
   const t = S.cur, c = t.colors, st = root.style;
   const set = (k, v) => st.setProperty(k, v);
   set('--bg', c.bg); set('--paper', c.paper); set('--ui-bg', c.uiBg); set('--ui-fg', c.uiText); set('--ui-border', c.uiBorder); set('--accent', c.link);
-  set('--r-text', c.text); set('--r-italic', c.italic); set('--r-quote', c.quote); set('--r-underline', c.underline); set('--r-heading', c.heading); set('--r-link', c.link);
+  set('--r-text', c.text); set('--r-italic', c.italic); set('--r-quote', c.quote); set('--r-quote-bg', c.quoteBg); set('--r-underline', c.underline); set('--r-heading', c.heading); set('--r-link', c.link);
   set('--r-shadow', t.shadowWidth > 0 ? `0 0 ${t.shadowWidth}px ${c.shadow}` : 'none');
   set('--r-font', fontStack(t.font, t.fontCustom));
   set('--r-hfont', t.hfont === 'same' ? 'inherit' : fontStack(t.hfont, t.fontCustom));
   set('--r-size', t.size + 'px'); set('--r-lh', String(t.lh)); set('--r-para', t.para + 'em'); set('--r-ls', t.ls + 'em');
   set('--r-indent', t.indent + 'em'); set('--r-align', t.align === 'justify' ? 'justify' : 'start');
   set('--r-width', t.width + 'px'); set('--r-pad', t.pad + 'px');
+  host.classList.toggle('qbg', ((parseColor(c.quoteBg) || [0, 0, 0, 0])[3]) > 0);
   const ui = parseColor(c.uiBg);
   st.colorScheme = ui && lum(ui) < 0.42 ? 'dark' : 'light';
   const tc = document.querySelector('meta[name="theme-color"]'); if (tc && ui) tc.setAttribute('content', toHex(ui));
@@ -551,7 +559,7 @@ function changed() { S.auto = false; applyTheme(); saveState(); renderThemeStatu
 function swatch(c) {
   const s = h('span', { class: 'swatch' });
   s.style.background = c.paper; s.style.color = c.text;
-  const q = h('span', { text: '「引」' }); q.style.color = c.quote;
+  const q = h('span', { text: '「引」' }); q.style.color = c.quote; q.style.background = c.quoteBg; q.style.borderRadius = '.5em';
   const i = h('span', { text: '斜' }); i.style.color = c.italic; i.style.fontStyle = 'italic';
   s.append(h('span', {}, '內文 ', q), h('span', {}, i, ' ', (() => { const l = h('span', { text: '連結' }); l.style.color = c.link; return l; })()));
   return s;
@@ -595,7 +603,7 @@ function buildControls() {
     pick.addEventListener('input', () => {
       const old = parseColor(S.cur.colors[key]) || [0, 0, 0, 1];
       const nw = parseColor(pick.value); if (!nw) return;
-      nw[3] = old[3];
+      nw[3] = old[3] > 0 ? old[3] : 1;
       S.cur.colors[key] = toCss(nw); text.value = S.cur.colors[key]; text.classList.remove('bad');
       changed();
     });
@@ -606,7 +614,14 @@ function buildControls() {
       S.cur.colors[key] = toCss(c); text.value = S.cur.colors[key]; pick.value = toHex(c);
       changed();
     });
-    rows.append(h('div', { class: 'crow' }, h('label', { for: 'c-' + key, text: label }), pick, text));
+    const row = h('div', { class: 'crow' }, h('label', { for: 'c-' + key, text: label }), pick, text);
+    if (key === 'quoteBg') {
+      row.classList.add('clearable');
+      row.append(h('button', { class: 'btn', type: 'button', id: 'cx-' + key, text: '不要底色', onclick: () => {
+        S.cur.colors[key] = 'rgba(0, 0, 0, 0)'; text.value = S.cur.colors[key]; text.classList.remove('bad'); changed();
+      } }));
+    }
+    rows.append(row);
   }
   for (const [pane, key, label, min, max, step, fmt] of SLIDERS) {
     const input = h('input', { type: 'range', id: 's-' + key, min, max, step });
@@ -685,6 +700,7 @@ function fromSillyTavern(j) {
     quote: toCss(over(quote, paper)), underline: toCss(over(get('underline_text_color') || text, paper)),
     heading: toCss(over(text, paper)), link: toCss(over(quote, paper)), uiBg: toCss(ui), uiText: toCss(over(text, ui)),
     uiBorder: toCss(over(get('border_color') || [128, 128, 128, 0.4], ui)), shadow: toCss(get('shadow_color') || [0, 0, 0, 1]),
+    quoteBg: 'rgba(0, 0, 0, 0)',
   };
   const t = clone(S.cur);
   t.colors = colors; t.css = '';
@@ -1006,21 +1022,22 @@ function colorQuotes(rootEl) {
     if (n.nodeType === 1) { if (BLOCK_RE.test(n.localName)) stack = []; continue; }
     const s = n.nodeValue, ranges = [];
     const carried = stack.length > 0 && !!n.parentElement.closest('em,i,cite,dfn,u,ins,a');
-    let start = stack.length ? 0 : -1;
+    let start = stack.length ? 0 : -1, cont = stack.length > 0;
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
-      if (stack.length && ch === stack[stack.length - 1]) { stack.pop(); if (!stack.length) { if (!(carried && start === 0)) ranges.push([start, i + 1]); start = -1; } }
-      else if (ch === '"' || OPENERS[ch]) { stack.push(ch === '"' ? '"' : OPENERS[ch]); if (stack.length === 1) start = i; }
+      if (stack.length && ch === stack[stack.length - 1]) { stack.pop(); if (!stack.length) { ranges.push([start, i + 1, !cont, true, carried && cont]); start = -1; cont = false; } }
+      else if (ch === '"' || OPENERS[ch]) { stack.push(ch === '"' ? '"' : OPENERS[ch]); if (stack.length === 1) { start = i; cont = false; } }
     }
-    if (stack.length && start >= 0 && start < s.length && !(carried && start === 0)) ranges.push([start, s.length]);
+    if (stack.length && start >= 0 && start < s.length) ranges.push([start, s.length, !cont, false, carried && cont]);
     if (ranges.length) jobs.push([n, ranges]);
   }
   for (const [n, ranges] of jobs) {
     const s = n.nodeValue, frag = document.createDocumentFragment();
     let pos = 0;
-    for (const [a, b] of ranges) {
+    for (const [a, b, opens, closes, inherit] of ranges) {
       if (a > pos) frag.append(s.slice(pos, a));
-      frag.append(h('span', { class: 'bk-q', text: s.slice(a, b) }));
+      // bk-q-in: text that keeps its own colour (italic, underline, link) but still sits on the quote background
+      frag.append(h('span', { class: (inherit ? 'bk-q-in' : 'bk-q') + (opens ? ' bk-q-s' : '') + (closes ? ' bk-q-e' : ''), text: s.slice(a, b) }));
       pos = b;
     }
     if (pos < s.length) frag.append(s.slice(pos));
