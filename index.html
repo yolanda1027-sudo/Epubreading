@@ -1,0 +1,1491 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>墨頁閱讀器</title>
+<meta name="description" content="可以自己換主題的 EPUB 閱讀器：顏色、字型、版面都能調，也能匯入酒館主題。">
+<meta name="theme-color" content="#eff1ec">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="墨頁">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+/* Layout: a one-screen reading desk. Thin bars above and below, the page in the middle,
+   and the theme workshop docked beside the page (right on desktop, below on a phone)
+   so every change shows on the text while you make it. */
+:root{
+  --bg:#e7eae5; --paper:#f7f8f5; --ui-bg:#eff1ec; --ui-fg:#272c32; --ui-border:#cfd4cc; --accent:#1f5f8b;
+  --r-text:#22262b; --r-italic:#6a7078; --r-quote:#1f5f8b; --r-underline:#2f6b55; --r-heading:#14171b; --r-link:#1f5f8b;
+  --r-shadow:none;
+  --f-ui:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  --f-display:"LXGW WenKai TC","Kaiti TC","BiauKai","DFKai-SB",serif;
+  --r-font:var(--f-ui); --r-hfont:inherit; --r-size:18px; --r-lh:1.9; --r-para:.9em; --r-ls:.02em;
+  --r-indent:0em; --r-align:start; --r-width:720px; --r-pad:24px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171c; --paper:#1b1f26; --ui-bg:#20252d; --ui-fg:#c9ced6; --ui-border:#333b47; --accent:#7fb2e5;
+    --r-text:#c9ced6; --r-italic:#8f97a3; --r-quote:#e0a458; --r-underline:#9ecbc0; --r-heading:#e6e9ee; --r-link:#7fb2e5;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14171c; --paper:#1b1f26; --ui-bg:#20252d; --ui-fg:#c9ced6; --ui-border:#333b47; --accent:#7fb2e5;
+  --r-text:#c9ced6; --r-italic:#8f97a3; --r-quote:#e0a458; --r-underline:#9ecbc0; --r-heading:#e6e9ee; --r-link:#7fb2e5;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ui-fg);font-family:var(--f-ui);font-size:15px;line-height:1.5;overflow:hidden}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#app{position:relative;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);background:var(--bg)}
+#topbar,#botbar{display:flex;align-items:center;gap:8px;background:var(--ui-bg);
+  padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#topbar{grid-row:1;border-bottom:1px solid var(--ui-border)}
+#botbar{grid-row:3;border-top:1px solid var(--ui-border)}
+#stage{grid-row:2;grid-column:1;position:relative;min-height:0}
+#app.immersive #topbar,#app.immersive #botbar{display:none}
+
+.btn{background:color-mix(in srgb,var(--ui-fg) 8%,transparent);border:1px solid var(--ui-border);border-radius:8px;
+  padding:.4em .8em;cursor:pointer;white-space:nowrap;line-height:1.4}
+.btn:hover{background:color-mix(in srgb,var(--ui-fg) 14%,transparent)}
+.btn.primary{background:var(--accent);color:var(--ui-bg);border-color:transparent;font-weight:600}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:not(.primary)[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.btn.primary[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ui-bg),0 0 0 4px var(--accent)}
+.btn:disabled{opacity:.4;cursor:default}
+
+#titlebox{flex:1;min-width:0;text-align:center;line-height:1.25}
+#book-title{font-family:var(--f-display);font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chap-title{font-size:.78rem;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#viewport{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;outline:none;overscroll-behavior:contain}
+#sheet{background:var(--paper);margin:0 auto;min-height:100%;max-width:calc(var(--r-width) + 2 * var(--r-pad));
+  padding-block:32px 40px;padding-left:max(16px,var(--r-pad),env(safe-area-inset-left,0px));padding-right:max(16px,var(--r-pad),env(safe-area-inset-right,0px))}
+#bookhost{display:block}
+#chapter-end{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:48px;padding-top:20px;
+  border-top:1px solid color-mix(in srgb,var(--r-text) 18%,transparent)}
+#chapter-end .btn{color:var(--r-text);border-color:color-mix(in srgb,var(--r-text) 25%,transparent);background:transparent;white-space:normal;text-align:left;max-width:100%}
+#app.paged #viewport{overflow:hidden}
+#app.paged #sheet{height:100%;padding-block:28px}
+#app.paged #bookhost{height:100%;overflow:hidden}
+#app.paged #chapter-end{display:none}
+
+#progress{flex:1;min-width:0;accent-color:var(--accent)}
+#progress-text{font-size:.8rem;font-variant-numeric:tabular-nums;white-space:nowrap;opacity:.8;min-width:5.5em;text-align:right}
+.nav-label{display:none}
+@media (min-width:640px){.nav-label{display:inline}}
+
+/* drawer: 目錄 / 書架 */
+#scrim{position:absolute;inset:0;background:rgba(0,0,0,.38);z-index:20}
+#drawer{position:absolute;inset:0 auto 0 0;width:min(360px,88%);z-index:21;background:var(--ui-bg);border-right:1px solid var(--ui-border);
+  display:flex;flex-direction:column;padding-left:env(safe-area-inset-left,0px)}
+.tabs{display:flex;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--ui-border)}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:.5em .7em;cursor:pointer;opacity:.7;white-space:nowrap}
+.tabs button[aria-selected="true"]{opacity:1;border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.tabs .spacer{flex:1}
+.drawer-body{flex:1;min-height:0;overflow-y:auto;padding:12px}
+.toc{list-style:none;margin:0;padding:0}
+.toc .toc{padding-left:1em}
+.toc button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:.5em .6em;cursor:pointer;line-height:1.4;overflow-wrap:anywhere}
+.toc button:hover{background:color-mix(in srgb,var(--ui-fg) 9%,transparent)}
+.toc button[aria-current="true"]{color:var(--accent);font-weight:600;background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.shelf{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.shelf-item{display:flex;gap:10px;align-items:stretch;border:1px solid var(--ui-border);border-radius:10px;padding:8px}
+.shelf-item.current{border-color:var(--accent)}
+.shelf-open{flex:1;min-width:0;display:flex;gap:10px;align-items:center;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.cover{flex:none;width:44px;height:62px;border-radius:4px;background:var(--paper);border:1px solid var(--ui-border);object-fit:cover;
+  display:grid;place-items:center;font-family:var(--f-display);font-size:1.3rem;color:var(--r-text)}
+.shelf-meta{min-width:0}
+.shelf-meta b{display:block;overflow-wrap:anywhere;line-height:1.3}
+.shelf-meta span{font-size:.78rem;opacity:.7}
+.hint{font-size:.8rem;opacity:.72;line-height:1.55;margin:.6em 0}
+.tag{display:inline-block;font-size:.7rem;border:1px solid currentColor;border-radius:4px;padding:0 .35em;margin-left:.4em;opacity:.75;vertical-align:1px}
+
+/* theme workshop */
+#panel{background:var(--ui-bg);display:flex;flex-direction:column;min-height:0;min-width:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
+.panel-head h2{font-family:var(--f-display);font-size:1.15rem;margin:0}
+.panel-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 20px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+#panel .tabs{overflow-x:auto}
+@media (min-width:860px){
+  #app.panel-open{grid-template-columns:minmax(0,1fr) 372px}
+  #panel{grid-column:2;grid-row:1 / 4;border-left:1px solid var(--ui-border)}
+}
+@media (max-width:859.98px){
+  #app.panel-open{grid-template-rows:auto minmax(0,1fr) auto 52%}
+  #panel{grid-row:4;border-top:1px solid var(--ui-border);padding-left:env(safe-area-inset-left,0px)}
+}
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
+.theme-card{position:relative}
+.theme-pick{width:100%;background:none;border:0;padding:0;cursor:pointer;text-align:center}
+.swatch{display:flex;flex-direction:column;justify-content:center;gap:2px;height:60px;border-radius:10px;border:2px solid transparent;
+  outline:1px solid var(--ui-border);font-size:.95rem;line-height:1.25;padding:0 8px;text-align:left}
+.theme-pick[aria-pressed="true"] .swatch{border-color:var(--accent);outline-color:var(--accent)}
+.theme-name{display:block;font-size:.8rem;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.theme-del{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;border-radius:11px;border:1px solid var(--ui-border);
+  background:var(--ui-bg);cursor:pointer;font-size:.72rem;line-height:1;padding:0 5px}
+.group{margin-top:18px}
+.group h3{font-size:.78rem;letter-spacing:.08em;opacity:.65;margin:0 0 8px;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.row > input[type="text"]{flex:1;min-width:0}
+input[type="text"],select,textarea{background:color-mix(in srgb,var(--ui-fg) 6%,transparent);border:1px solid var(--ui-border);border-radius:8px;padding:.4em .6em;min-width:0}
+textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;resize:vertical}
+.crow{display:grid;grid-template-columns:5.5em 40px minmax(0,1fr);gap:8px;align-items:center;margin-top:7px}
+.crow input[type="color"]{width:40px;height:30px;padding:0;border:1px solid var(--ui-border);border-radius:6px;background:none;cursor:pointer}
+.crow input[type="text"]{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem}
+.crow input.bad{border-color:#c0392b}
+.srow{display:grid;grid-template-columns:5.5em minmax(0,1fr) 4.6em;gap:8px;align-items:center;margin-top:9px}
+.srow input{accent-color:var(--accent);min-width:0;width:100%}
+.srow output{font-size:.8rem;font-variant-numeric:tabular-nums;text-align:right;opacity:.8}
+.frow{display:grid;grid-template-columns:5.5em minmax(0,1fr);gap:8px;align-items:center;margin-top:9px}
+.check{display:flex;gap:8px;align-items:flex-start;margin-top:10px;cursor:pointer}
+.check input{accent-color:var(--accent);margin-top:.25em}
+.seg{display:inline-flex;justify-self:start;border:1px solid var(--ui-border);border-radius:8px;overflow:hidden}
+.seg button{background:none;border:0;padding:.4em .9em;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--ui-bg);font-weight:600}
+
+#toast{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:60;max-width:min(520px,calc(100% - 32px));
+  background:var(--ui-fg);color:var(--ui-bg);padding:.6em 1em;border-radius:10px;font-size:.88rem;line-height:1.45;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#drop-hint{position:absolute;inset:12px;z-index:70;border:3px dashed var(--accent);border-radius:16px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--ui-bg) 88%,transparent);font-family:var(--f-display);font-size:1.4rem;pointer-events:none}
+@media (prefers-reduced-motion:no-preference){ #toast{animation:rise .18s ease-out} }
+@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+<style id="book-fonts"></style>
+<style id="custom-css"></style>
+</head>
+<body>
+
+<div id="app">
+  <header id="topbar">
+    <button class="btn" id="btn-toc" aria-haspopup="dialog">目錄</button>
+    <button class="btn" id="btn-shelf" aria-haspopup="dialog">書架</button>
+    <div id="titlebox"><div id="book-title">墨頁閱讀器</div><div id="chap-title">&nbsp;</div></div>
+    <button class="btn primary" id="btn-theme" aria-pressed="false">主題</button>
+  </header>
+
+  <main id="stage">
+    <div id="viewport" tabindex="0" aria-label="書頁">
+      <div id="sheet">
+        <div id="bookhost"></div>
+        <div id="chapter-end">
+          <button class="btn" id="end-prev">‹ 上一章</button>
+          <button class="btn" id="end-next">下一章 ›</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="botbar">
+    <button class="btn" id="btn-prev" aria-label="上一章">‹<span class="nav-label"> 上一章</span></button>
+    <input type="range" id="progress" min="0" max="1000" value="0" aria-label="全書進度">
+    <span id="progress-text">0%</span>
+    <button class="btn" id="btn-next" aria-label="下一章"><span class="nav-label">下一章 </span>›</button>
+  </footer>
+
+  <div id="scrim" hidden></div>
+  <aside id="drawer" hidden role="dialog" aria-label="目錄與書架">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-dtab="toc" aria-selected="true">目錄</button>
+      <button role="tab" data-dtab="shelf" aria-selected="false">書架</button>
+      <span class="spacer"></span>
+      <button id="drawer-close" aria-label="關閉">關閉</button>
+    </div>
+    <div class="drawer-body" data-dpane="toc"><ul class="toc" id="toc-list"></ul></div>
+    <div class="drawer-body" data-dpane="shelf" hidden>
+      <button class="btn primary" id="btn-open" style="width:100%">開啟 EPUB 檔案</button>
+      <p class="hint">也可以直接把 .epub 檔拖進視窗。開過的書會留在這個瀏覽器裡，方便下次接著看；清除網站資料後就會消失，原檔請自己留著。</p>
+      <div class="shelf" id="shelf-list"></div>
+    </div>
+  </aside>
+
+  <aside id="panel" hidden aria-label="主題設定">
+    <div class="panel-head"><h2>主題工坊</h2><button class="btn ghost" id="panel-close">收起</button></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="themes" aria-selected="true">主題</button>
+      <button role="tab" data-tab="colors" aria-selected="false">顏色</button>
+      <button role="tab" data-tab="type" aria-selected="false">文字</button>
+      <button role="tab" data-tab="layout" aria-selected="false">版面</button>
+      <button role="tab" data-tab="css" aria-selected="false">自訂 CSS</button>
+    </div>
+    <div class="panel-body">
+      <section data-pane="themes">
+        <div class="theme-grid" id="theme-grid"></div>
+        <p class="hint" id="theme-status"></p>
+        <div class="group">
+          <h3>存成自己的主題</h3>
+          <div class="row"><input type="text" id="theme-name" placeholder="幫主題取個名字" maxlength="40"><button class="btn primary" id="theme-save">儲存</button></div>
+          <p class="hint">內建主題只換配色，不動你調好的字型和版面。自己存的主題會把顏色、字型、版面和自訂 CSS 一起記住。</p>
+        </div>
+        <div class="group">
+          <h3>匯入與匯出</h3>
+          <div class="row"><button class="btn" id="theme-export">匯出目前主題</button><button class="btn" id="theme-import">匯入主題</button></div>
+          <div id="io-box" hidden>
+            <p class="hint" id="io-hint"></p>
+            <textarea id="io-text" spellcheck="false" aria-label="主題 JSON"></textarea>
+            <div class="row">
+              <button class="btn" id="io-copy">複製</button>
+              <button class="btn" id="io-download">下載成檔案</button>
+              <button class="btn primary" id="io-apply">套用這段 JSON</button>
+              <button class="btn" id="io-file-btn">選 JSON 檔</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-pane="colors" hidden>
+        <div id="color-rows"></div>
+        <div data-sliders="colors"></div>
+        <p class="hint">色碼欄可以直接貼 <code>#rrggbb</code>、<code>rgba(…)</code> 這類 CSS 顏色。</p>
+      </section>
+
+      <section data-pane="type" hidden>
+        <div class="frow"><label for="f-font">內文字型</label><select id="f-font"></select></div>
+        <div class="frow" id="f-custom-row" hidden><label for="f-custom">字型名稱</label><input type="text" id="f-custom" placeholder="例如 jf open 粉圓, Georgia"></div>
+        <div class="frow"><label for="f-hfont">標題字型</label><select id="f-hfont"></select></div>
+        <div class="row"><button class="btn" id="f-upload-btn">上傳字型檔</button><span class="hint" style="margin:0">ttf / otf / woff / woff2，只存在這個瀏覽器</span></div>
+        <div data-sliders="type"></div>
+        <div class="frow"><label for="f-align">對齊</label><select id="f-align"><option value="start">靠左對齊</option><option value="justify">左右對齊</option></select></div>
+      </section>
+
+      <section data-pane="layout" hidden>
+        <div class="frow"><span>翻頁方式</span>
+          <div class="seg" id="mode-seg"><button data-mode="scroll" aria-pressed="true">上下捲動</button><button data-mode="paged" aria-pressed="false">左右分頁</button></div>
+        </div>
+        <div data-sliders="layout"></div>
+        <div class="frow"><label for="set-bookcss">書本樣式</label>
+          <select id="set-bookcss">
+            <option value="theme">主題優先（建議）</option>
+            <option value="keep">保留書本原本的樣子</option>
+            <option value="off">完全不用書本樣式</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="set-quotes"><span>引號裡的文字套用「引號」顏色（「」『』“” ""）</span></label>
+        <p class="hint">分頁模式：點畫面左右兩側或按方向鍵翻頁，點中間收起／叫回工具列。</p>
+      </section>
+
+      <section data-pane="css" hidden>
+        <textarea id="css-text" spellcheck="false" aria-label="自訂 CSS" placeholder="/* 例如 */&#10;p { text-indent: 2em; }&#10;.bk-q { font-weight: 600; }"></textarea>
+        <div class="row"><button class="btn" id="css-clear">清空</button></div>
+        <p class="hint">會跟著主題一起儲存。可用的選擇器：<code>.bk-body</code> 整段內文、<code>p</code> <code>h1</code> <code>em</code> <code>blockquote</code> 等一般標籤、<code>.bk-q</code> 引號文字、<code>#topbar</code> <code>#botbar</code> <code>#panel</code> 介面。書本樣式設成「主題優先」時，蓋不過去的屬性請加 <code>!important</code>。</p>
+      </section>
+    </div>
+  </aside>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="drop-hint" hidden>放開就打開這本書</div>
+  <input type="file" id="file-epub" accept=".epub,application/epub+zip" hidden>
+  <input type="file" id="file-theme" accept=".json,application/json" hidden>
+  <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" hidden>
+</div>
+
+<script src="vendor/jszip.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const root = document.documentElement;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const clone = o => JSON.parse(JSON.stringify(o));
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+
+/* ---------- storage (always optional) ---------- */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let dbPromise = null;
+function openDb() {
+  if (!dbPromise) dbPromise = new Promise(res => {
+    try {
+      const rq = indexedDB.open('moye-reader', 1);
+      rq.onupgradeneeded = () => {
+        const d = rq.result;
+        d.createObjectStore('books', { keyPath: 'id' });
+        d.createObjectStore('data', { keyPath: 'id' });
+        d.createObjectStore('fonts', { keyPath: 'name' });
+      };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = rq.onblocked = () => res(null);
+    } catch { res(null); }
+  });
+  return dbPromise;
+}
+async function idb(store, mode, fn) {
+  const d = await openDb();
+  if (!d) return undefined;
+  return new Promise(res => {
+    try {
+      const tx = d.transaction(store, mode);
+      const rq = fn(tx.objectStore(store));
+      tx.oncomplete = () => res(rq ? rq.result : undefined);
+      tx.onerror = tx.onabort = () => res(undefined);
+    } catch { res(undefined); }
+  });
+}
+
+/* ---------- toast ---------- */
+let toastTimer = 0;
+function toast(msg, ms = 3200) {
+  const t = $('#toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+/* ---------- colour helpers ---------- */
+const cx = (() => { try { return document.createElement('canvas').getContext('2d'); } catch { return null; } })();
+function parseColor(s) {
+  if (!cx || typeof s !== 'string' || !s.trim()) return null;
+  cx.fillStyle = '#000'; cx.fillStyle = s; const a = cx.fillStyle;
+  cx.fillStyle = '#fff'; cx.fillStyle = s; const b = cx.fillStyle;
+  if (a !== b) return null;
+  if (a[0] === '#') return [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16), 1];
+  const m = (a.match(/[\d.]+/g) || []).map(Number);
+  return m.length >= 3 ? [m[0], m[1], m[2], m[3] == null ? 1 : m[3]] : null;
+}
+const hex2 = n => Math.round(clamp(n, 0, 255)).toString(16).padStart(2, '0');
+const toHex = c => '#' + hex2(c[0]) + hex2(c[1]) + hex2(c[2]);
+const toCss = c => c[3] >= 1 ? toHex(c) : `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${+c[3].toFixed(3)})`;
+const lum = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+const over = (fg, bg) => { const a = fg[3]; return [fg[0] * a + bg[0] * (1 - a), fg[1] * a + bg[1] * (1 - a), fg[2] * a + bg[2] * (1 - a), 1]; };
+
+/* ---------- themes ---------- */
+const COLOR_FIELDS = [
+  ['bg', '背景'], ['paper', '紙張'], ['text', '主文字'], ['italic', '斜體字'], ['quote', '引號文字'], ['underline', '底線文字'],
+  ['heading', '標題'], ['link', '連結／強調'], ['uiBg', '介面底色'], ['uiText', '介面文字'], ['uiBorder', '介面邊框'], ['shadow', '文字陰影'],
+];
+const PRESETS = [
+  { name: '宣紙', colors: { bg: '#e7eae5', paper: '#f7f8f5', text: '#22262b', italic: '#6a7078', quote: '#1f5f8b', underline: '#2f6b55', heading: '#14171b', link: '#1f5f8b', uiBg: '#eff1ec', uiText: '#272c32', uiBorder: '#cfd4cc', shadow: 'rgba(0, 0, 0, 0.25)' } },
+  { name: '夜讀', colors: { bg: '#14171c', paper: '#1b1f26', text: '#c9ced6', italic: '#8f97a3', quote: '#e0a458', underline: '#9ecbc0', heading: '#e6e9ee', link: '#7fb2e5', uiBg: '#20252d', uiText: '#c9ced6', uiBorder: '#333b47', shadow: 'rgba(0, 0, 0, 0.6)' } },
+  { name: '酒館深色', colors: { bg: '#101010', paper: '#171717', text: '#dcdcd2', italic: '#919191', quote: '#e18a24', underline: '#bce7cf', heading: '#ecece4', link: '#e18a24', uiBg: '#1c1c1c', uiText: '#dcdcd2', uiBorder: '#000000', shadow: 'rgba(0, 0, 0, 1)' } },
+  { name: '舊書頁', colors: { bg: '#ddd2b8', paper: '#ece2c9', text: '#463b2c', italic: '#85755b', quote: '#8a4a26', underline: '#5d6b3a', heading: '#33291c', link: '#7b5320', uiBg: '#e4d9bf', uiText: '#463b2c', uiBorder: '#c6b998', shadow: 'rgba(70, 59, 44, 0.3)' } },
+  { name: '豆沙綠', colors: { bg: '#b4dbb9', paper: '#c7edcc', text: '#2a382d', italic: '#5c7160', quote: '#1b6a50', underline: '#3c5f8a', heading: '#1b291e', link: '#1f6d59', uiBg: '#bde3c2', uiText: '#2a382d', uiBorder: '#9bc7a2', shadow: 'rgba(42, 56, 45, 0.3)' } },
+  { name: '櫻餅', colors: { bg: '#efdfe3', paper: '#fbf2f4', text: '#49353f', italic: '#987a87', quote: '#ad436a', underline: '#4d7a6b', heading: '#38262f', link: '#ad436a', uiBg: '#f5e7eb', uiText: '#49353f', uiBorder: '#e0c8d0', shadow: 'rgba(73, 53, 63, 0.3)' } },
+  { name: '純黑', colors: { bg: '#000000', paper: '#000000', text: '#b4b4b4', italic: '#787878', quote: '#6fb0d8', underline: '#9fc49a', heading: '#d4d4d4', link: '#6fa8dc', uiBg: '#0c0c0c', uiText: '#b4b4b4', uiBorder: '#262626', shadow: 'rgba(0, 0, 0, 1)' } },
+];
+const FONTS = [
+  { id: 'sans', label: '系統黑體', stack: 'system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Noto Sans CJK TC", sans-serif' },
+  { id: 'serif', label: '系統明體', stack: '"Songti TC", "Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", "PMingLiU", serif' },
+  { id: 'kai', label: '系統楷體', stack: '"Kaiti TC", "BiauKai", "DFKai-SB", "標楷體", "KaiTi", serif' },
+  { id: 'g-wenkai', label: '霞鶩文楷（網路字型）', stack: '"LXGW WenKai TC", "Kaiti TC", "DFKai-SB", serif', g: 'LXGW+WenKai+TC:wght@400;700' },
+  { id: 'g-notoserif', label: '思源宋體（網路字型）', stack: '"Noto Serif TC", "Songti TC", "PMingLiU", serif', g: 'Noto+Serif+TC:wght@400;700' },
+  { id: 'g-notosans', label: '思源黑體（網路字型）', stack: '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif', g: 'Noto+Sans+TC:wght@400;700' },
+  { id: 'mono', label: '等寬字', stack: 'ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK TC", monospace' },
+];
+const uploaded = new Map();   // name -> css family
+const DEF_TYPO = { font: 'sans', fontCustom: '', hfont: 'same', size: 18, lh: 1.9, para: 0.9, ls: 0.02, indent: 0, align: 'start', width: 720, pad: 24, shadowWidth: 0, css: '' };
+const SLIDERS = [
+  ['type', 'size', '字級', 12, 36, 1, v => v + 'px'],
+  ['type', 'lh', '行高', 1.2, 2.8, 0.05, v => v.toFixed(2)],
+  ['type', 'para', '段落間距', 0, 2.5, 0.05, v => v.toFixed(2) + ' 字'],
+  ['type', 'ls', '字距', 0, 0.3, 0.01, v => v.toFixed(2) + ' 字'],
+  ['type', 'indent', '首行縮排', 0, 3, 0.5, v => v + ' 字'],
+  ['layout', 'width', '頁面寬度', 420, 1400, 20, v => v + 'px'],
+  ['layout', 'pad', '頁邊留白', 16, 80, 2, v => v + 'px'],
+  ['colors', 'shadowWidth', '陰影寬度', 0, 10, 0.5, v => v + 'px'],
+];
+const hostIsDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+const autoPreset = () => PRESETS[hostIsDark() ? 1 : 0];
+
+function normTheme(t) {
+  const base = autoPreset();
+  const out = { ...DEF_TYPO, name: '', colors: { ...base.colors } };
+  if (t && typeof t === 'object') {
+    for (const k of Object.keys(DEF_TYPO)) if (typeof t[k] === typeof DEF_TYPO[k]) out[k] = t[k];
+    if (typeof t.name === 'string') out.name = t.name.slice(0, 40);
+    if (t.colors && typeof t.colors === 'object') for (const [k] of COLOR_FIELDS) if (parseColor(t.colors[k])) out.colors[k] = t.colors[k];
+  }
+  for (const [, key, , min, max] of SLIDERS) out[key] = clamp(+out[key] || 0, min, max);
+  return out;
+}
+let S = LS.get('moye.state', null);
+if (!S || typeof S !== 'object') S = {};
+S.settings = { mode: 'scroll', bookCss: 'theme', quotes: true, ...(S.settings || {}) };
+S.user = Array.isArray(S.user) ? S.user.map(normTheme).filter(t => t.name) : [];
+if (S.cur) { S.cur = normTheme(S.cur); S.auto = !!S.auto; }
+else { S.cur = normTheme({ colors: autoPreset().colors }); S.active = autoPreset().name; S.auto = true; }
+const saveState = () => LS.set('moye.state', S);
+
+const fontStack = (id, custom) => {
+  if (id === 'custom') return (custom || '').replace(/[;{}<>]/g, '').trim() ? custom.replace(/[;{}<>]/g, '') + ', ' + FONTS[0].stack : FONTS[0].stack;
+  if (id && id.startsWith('up:')) return uploaded.has(id.slice(3)) ? `"${uploaded.get(id.slice(3))}", ${FONTS[0].stack}` : FONTS[0].stack;
+  return (FONTS.find(f => f.id === id) || FONTS[0]).stack;
+};
+const loadedG = new Set(['g-wenkai']);
+function ensureWebFont(id) {
+  const f = FONTS.find(x => x.id === id);
+  if (!f || !f.g || loadedG.has(id)) return;
+  loadedG.add(id);
+  const l = h('link', { rel: 'stylesheet', href: `https://fonts.googleapis.com/css2?family=${f.g}&display=swap` });
+  l.onload = () => { if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleLayout); };
+  document.head.append(l);
+}
+
+/* ---------- reader DOM (shadow root keeps book CSS away from the app) ---------- */
+const app = $('#app'), vp = $('#viewport'), host = $('#bookhost');
+const shadow = host.attachShadow({ mode: 'open' });
+const READER_CSS = `
+:host{display:block}
+[hidden]{display:none!important}
+.bk-html{color:var(--r-text);font-family:var(--r-font);font-size:var(--r-size);line-height:var(--r-lh);letter-spacing:var(--r-ls);
+  text-align:var(--r-align);text-shadow:var(--r-shadow);overflow-wrap:anywhere;line-break:strict;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.bk-body{margin:0;padding:0}
+p{margin:0 0 var(--r-para);text-indent:var(--r-indent)}
+h1,h2,h3,h4,h5,h6{color:var(--r-heading);font-family:var(--r-hfont);line-height:1.35;margin:1.5em 0 .7em;text-wrap:balance;text-indent:0}
+h1{font-size:1.6em} h2{font-size:1.35em} h3{font-size:1.15em} h4,h5,h6{font-size:1em}
+.bk-body > :first-child{margin-top:0}
+em,i,cite,dfn{color:var(--r-italic)}
+u,ins{color:var(--r-underline);text-underline-offset:.2em}
+q,.bk-q{color:var(--r-quote)}
+a{color:var(--r-link);text-underline-offset:.2em;cursor:pointer}
+img,svg,video,canvas{max-width:100%;height:auto}
+hr{border:0;border-top:1px solid color-mix(in srgb,var(--r-text) 22%,transparent);margin:2em 0}
+blockquote{margin:1em 0;padding:.3em 0 .3em 1em;border-left:3px solid color-mix(in srgb,var(--r-quote) 55%,transparent)}
+pre,code,kbd,samp{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.9em;letter-spacing:0}
+pre{white-space:pre-wrap;padding:.8em 1em;border-radius:6px;background:color-mix(in srgb,var(--r-text) 8%,transparent)}
+table{border-collapse:collapse;max-width:100%}
+td,th{border:1px solid color-mix(in srgb,var(--r-text) 25%,transparent);padding:.3em .6em}
+ul,ol{padding-left:1.6em}
+::selection{background:color-mix(in srgb,var(--r-quote) 32%,transparent)}
+.bk-fn{display:none}
+.bk-noteref{text-decoration:none;font-size:.85em}
+.bk-msg{color:color-mix(in srgb,var(--r-text) 65%,transparent);text-align:center;padding:3em 0}
+:host(.paged) .bk-main{height:100%;column-width:var(--pg-w,600px);column-gap:48px;column-fill:auto}
+:host(.paged) img,:host(.paged) svg{max-height:calc(var(--pg-h,600px) * .92);object-fit:contain;break-inside:avoid}
+@media (prefers-reduced-motion:no-preference){:host(.paged.anim) .bk-main{transition:transform .22s ease-out}}
+.bk-pop{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.42);
+  padding:16px max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+@media (min-width:700px){.bk-pop{align-items:center}}
+.bk-pop-card{position:relative;background:var(--paper);border:1px solid var(--ui-border);border-radius:14px;width:min(680px,100%);max-height:78%;
+  overflow:auto;padding:44px 22px 22px;box-shadow:0 18px 48px rgba(0,0,0,.35)}
+.bk-pop-close{position:absolute;top:10px;right:12px;font:inherit;font-family:system-ui,sans-serif;font-size:14px;letter-spacing:0;color:var(--ui-fg);
+  background:color-mix(in srgb,var(--ui-fg) 8%,transparent);border:1px solid var(--ui-border);border-radius:8px;padding:.25em .8em;cursor:pointer}
+`;
+const FORCE_CSS = `
+.bk-body,.bk-body :where(*){color:inherit!important;background-color:transparent!important;line-height:inherit!important}
+.bk-html{color:var(--r-text)!important;font-size:var(--r-size)!important;line-height:var(--r-lh)!important;letter-spacing:var(--r-ls)!important;background:transparent!important}
+.bk-body{font-size:inherit!important;margin:0!important;padding:0!important}
+.bk-body,.bk-body :where(:not(pre,code,kbd,samp,tt)){font-family:var(--r-font)!important}
+.bk-body :is(h1,h2,h3,h4,h5,h6){font-family:var(--r-hfont)!important;color:var(--r-heading)!important;line-height:1.35!important}
+.bk-body :where(p){margin-top:0!important;margin-bottom:var(--r-para)!important;text-indent:var(--r-indent)!important}
+.bk-body :is(em,i,cite,dfn){color:var(--r-italic)!important}
+.bk-body :is(u,ins){color:var(--r-underline)!important}
+.bk-body :is(q,.bk-q){color:var(--r-quote)!important}
+.bk-body a{color:var(--r-link)!important}
+.bk-body :is(.reasoning,.swipe,aside,details,pre){background-color:color-mix(in srgb,var(--r-text) 7%,transparent)!important;
+  border-color:color-mix(in srgb,var(--r-text) 28%,transparent)!important}
+.bk-body :is(.reasoning,.swipe > p:first-child){color:color-mix(in srgb,var(--r-text) 72%,transparent)!important}
+`;
+const stBase = h('style', { text: READER_CSS });
+const stBook = h('style');
+const stForce = h('style');
+const stCustom = h('style');
+const htmlEl = h('div', { class: 'bk-html bk-main' });
+const bodyEl = h('div', { class: 'bk-body' });
+const popEl = h('div', { class: 'bk-pop', hidden: true });
+const popBody = h('div', { class: 'bk-body' });
+const popClose = h('button', { class: 'bk-pop-close', type: 'button', text: '關閉' });
+popEl.append(h('div', { class: 'bk-pop-card bk-html', role: 'dialog', 'aria-label': '註腳' }, popClose, popBody));
+htmlEl.append(bodyEl);
+shadow.append(stBase, stBook, stForce, stCustom, htmlEl, popEl);
+
+function applyTheme() {
+  const t = S.cur, c = t.colors, st = root.style;
+  const set = (k, v) => st.setProperty(k, v);
+  set('--bg', c.bg); set('--paper', c.paper); set('--ui-bg', c.uiBg); set('--ui-fg', c.uiText); set('--ui-border', c.uiBorder); set('--accent', c.link);
+  set('--r-text', c.text); set('--r-italic', c.italic); set('--r-quote', c.quote); set('--r-underline', c.underline); set('--r-heading', c.heading); set('--r-link', c.link);
+  set('--r-shadow', t.shadowWidth > 0 ? `0 0 ${t.shadowWidth}px ${c.shadow}` : 'none');
+  set('--r-font', fontStack(t.font, t.fontCustom));
+  set('--r-hfont', t.hfont === 'same' ? 'inherit' : fontStack(t.hfont, t.fontCustom));
+  set('--r-size', t.size + 'px'); set('--r-lh', String(t.lh)); set('--r-para', t.para + 'em'); set('--r-ls', t.ls + 'em');
+  set('--r-indent', t.indent + 'em'); set('--r-align', t.align === 'justify' ? 'justify' : 'start');
+  set('--r-width', t.width + 'px'); set('--r-pad', t.pad + 'px');
+  const ui = parseColor(c.uiBg);
+  st.colorScheme = ui && lum(ui) < 0.42 ? 'dark' : 'light';
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc && ui) tc.setAttribute('content', toHex(ui));
+  $('#custom-css').textContent = t.css; stCustom.textContent = t.css;
+  ensureWebFont(t.font); ensureWebFont(t.hfont);
+  scheduleLayout();
+}
+function themeSource() {
+  const p = PRESETS.find(x => x.name === S.active);
+  if (p) return { kind: 'preset', colors: p.colors };
+  const u = S.user.find(x => x.name === S.active);
+  return u ? { kind: 'user', theme: u } : null;
+}
+function isModified() {
+  const src = themeSource();
+  if (!src) return true;
+  if (src.kind === 'preset') return JSON.stringify(src.colors) !== JSON.stringify(S.cur.colors);
+  const a = { ...S.cur, name: '' }, b = { ...src.theme, name: '' };
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+function changed() { S.auto = false; applyTheme(); saveState(); renderThemeStatus(); }
+
+/* ---------- theme panel ---------- */
+function swatch(c) {
+  const s = h('span', { class: 'swatch' });
+  s.style.background = c.paper; s.style.color = c.text;
+  const q = h('span', { text: '「引」' }); q.style.color = c.quote;
+  const i = h('span', { text: '斜' }); i.style.color = c.italic; i.style.fontStyle = 'italic';
+  s.append(h('span', {}, '內文 ', q), h('span', {}, i, ' ', (() => { const l = h('span', { text: '連結' }); l.style.color = c.link; return l; })()));
+  return s;
+}
+function renderThemes() {
+  const grid = $('#theme-grid'); grid.replaceChildren();
+  const add = (t, user) => {
+    const pick = h('button', { class: 'theme-pick', type: 'button', 'aria-pressed': String(S.active === t.name), title: t.name }, swatch(t.colors), h('span', { class: 'theme-name', text: t.name }));
+    pick.addEventListener('click', () => {
+      if (user) S.cur = normTheme(t); else S.cur.colors = { ...t.colors };
+      S.active = t.name; S.auto = false;
+      applyTheme(); saveState(); syncControls(); renderThemes();
+    });
+    const card = h('div', { class: 'theme-card' }, pick);
+    if (user) {
+      const del = h('button', { class: 'theme-del', type: 'button', 'aria-label': `刪除主題 ${t.name}`, text: '×' });
+      let armed = 0;
+      del.addEventListener('click', () => {
+        if (!armed) { armed = setTimeout(() => { armed = 0; del.textContent = '×'; }, 3000); del.textContent = '確定刪除？'; return; }
+        clearTimeout(armed);
+        S.user = S.user.filter(x => x.name !== t.name);
+        saveState(); renderThemes(); toast(`已刪除主題「${t.name}」`);
+      });
+      card.append(del);
+    }
+    grid.append(card);
+  };
+  PRESETS.forEach(p => add(p, false));
+  S.user.forEach(u => add(u, true));
+  renderThemeStatus();
+}
+function renderThemeStatus() {
+  const src = themeSource();
+  $('#theme-status').textContent = src ? `目前：${S.active}${isModified() ? '（改過了，還沒儲存）' : ''}` : '目前：自訂（還沒儲存）';
+}
+function buildControls() {
+  const rows = $('#color-rows');
+  for (const [key, label] of COLOR_FIELDS) {
+    const pick = h('input', { type: 'color', id: 'c-' + key, 'aria-label': label });
+    const text = h('input', { type: 'text', id: 'ct-' + key, 'aria-label': label + '色碼', spellcheck: 'false' });
+    pick.addEventListener('input', () => {
+      const old = parseColor(S.cur.colors[key]) || [0, 0, 0, 1];
+      const nw = parseColor(pick.value); if (!nw) return;
+      nw[3] = old[3];
+      S.cur.colors[key] = toCss(nw); text.value = S.cur.colors[key]; text.classList.remove('bad');
+      changed();
+    });
+    text.addEventListener('change', () => {
+      const c = parseColor(text.value);
+      text.classList.toggle('bad', !c);
+      if (!c) return;
+      S.cur.colors[key] = toCss(c); text.value = S.cur.colors[key]; pick.value = toHex(c);
+      changed();
+    });
+    rows.append(h('div', { class: 'crow' }, h('label', { for: 'c-' + key, text: label }), pick, text));
+  }
+  for (const [pane, key, label, min, max, step, fmt] of SLIDERS) {
+    const input = h('input', { type: 'range', id: 's-' + key, min, max, step });
+    const out = h('output', { for: 's-' + key });
+    input.addEventListener('input', () => { S.cur[key] = +input.value; out.textContent = fmt(+input.value); changed(); });
+    input._fmt = fmt; input._out = out;
+    $(`[data-sliders="${pane}"]`).append(h('div', { class: 'srow' }, h('label', { for: 's-' + key, text: label }), input, out));
+  }
+  $('#f-font').addEventListener('change', e => { S.cur.font = e.target.value; $('#f-custom-row').hidden = S.cur.font !== 'custom'; changed(); });
+  $('#f-hfont').addEventListener('change', e => { S.cur.hfont = e.target.value; changed(); });
+  $('#f-custom').addEventListener('input', e => { S.cur.fontCustom = e.target.value.slice(0, 200); changed(); });
+  $('#f-align').addEventListener('change', e => { S.cur.align = e.target.value; changed(); });
+  let cssTimer = 0;
+  $('#css-text').addEventListener('input', e => { clearTimeout(cssTimer); cssTimer = setTimeout(() => { S.cur.css = e.target.value; changed(); }, 250); });
+  $('#css-clear').addEventListener('click', () => { $('#css-text').value = ''; S.cur.css = ''; changed(); });
+  $$('#mode-seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  $('#set-bookcss').addEventListener('change', e => { S.settings.bookCss = e.target.value; saveState(); rerender(); });
+  $('#set-quotes').addEventListener('change', e => { S.settings.quotes = e.target.checked; saveState(); rerender(); });
+}
+function fillFontSelects() {
+  const opts = FONTS.map(f => [f.id, f.label]).concat([...uploaded.keys()].map(n => ['up:' + n, `${n}（上傳的字型）`]));
+  const f = $('#f-font'), hf = $('#f-hfont');
+  f.replaceChildren(...opts.map(([v, l]) => h('option', { value: v, text: l })), h('option', { value: 'custom', text: '自己輸入字型名稱…' }));
+  hf.replaceChildren(h('option', { value: 'same', text: '跟內文一樣' }), ...opts.map(([v, l]) => h('option', { value: v, text: l })));
+}
+function syncControls() {
+  const t = S.cur;
+  for (const [key] of COLOR_FIELDS) {
+    const c = parseColor(t.colors[key]) || [0, 0, 0, 1];
+    $('#c-' + key).value = toHex(c); const tx = $('#ct-' + key); tx.value = t.colors[key]; tx.classList.remove('bad');
+  }
+  for (const [, key] of SLIDERS) { const i = $('#s-' + key); i.value = t[key]; i._out.textContent = i._fmt(+t[key]); }
+  fillFontSelects();
+  $('#f-font').value = t.font; if ($('#f-font').value !== t.font) $('#f-font').value = 'sans';
+  $('#f-hfont').value = t.hfont; if ($('#f-hfont').value !== t.hfont) $('#f-hfont').value = 'same';
+  $('#f-custom').value = t.fontCustom; $('#f-custom-row').hidden = t.font !== 'custom';
+  $('#f-align').value = t.align;
+  $('#css-text').value = t.css;
+  $('#set-bookcss').value = S.settings.bookCss; $('#set-quotes').checked = !!S.settings.quotes;
+  $$('#mode-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.settings.mode)));
+  const u = S.user.find(x => x.name === S.active);
+  $('#theme-name').value = u ? u.name : '';
+}
+
+/* theme save / import / export */
+function saveTheme() {
+  let name = $('#theme-name').value.trim();
+  if (!name) { toast('先幫主題取個名字，再按儲存'); $('#theme-name').focus(); return; }
+  if (PRESETS.some(p => p.name === name)) name += '（我的）';
+  const t = normTheme({ ...clone(S.cur), name });
+  const i = S.user.findIndex(x => x.name === name);
+  if (i >= 0) S.user[i] = t; else S.user.push(t);
+  S.cur = normTheme(t); S.active = name; S.auto = false;
+  saveState(); renderThemes(); syncControls();
+  toast(i >= 0 ? `已更新主題「${name}」` : `已儲存主題「${name}」`);
+}
+function exportTheme() {
+  const t = clone(S.cur);
+  const u = S.user.find(x => x.name === S.active);
+  const out = { format: 'moye-theme', version: 1, ...t, name: (u && u.name) || $('#theme-name').value.trim() || S.active || '我的主題' };
+  $('#io-box').hidden = false;
+  $('#io-hint').textContent = '這段 JSON 就是目前的主題。可以複製，或下載成 .json 檔，之後用「匯入主題」帶回來。';
+  $('#io-text').value = JSON.stringify(out, null, 2);
+}
+function fromSillyTavern(j) {
+  const get = k => parseColor(j[k]);
+  const text = get('main_text_color') || [220, 220, 210, 1];
+  const dark = lum(text) > 0.5;
+  const base = dark ? [18, 18, 20, 1] : [240, 240, 238, 1];
+  const ui = over(get('blur_tint_color') || base, base);
+  const paper = over(get('chat_tint_color') || ui, ui);
+  const bg = over([0, 0, 0, dark ? 0.25 : 0.06], paper);
+  const quote = get('quote_text_color') || text;
+  const colors = {
+    bg: toCss(bg), paper: toCss(paper), text: toCss(over(text, paper)), italic: toCss(over(get('italics_text_color') || text, paper)),
+    quote: toCss(over(quote, paper)), underline: toCss(over(get('underline_text_color') || text, paper)),
+    heading: toCss(over(text, paper)), link: toCss(over(quote, paper)), uiBg: toCss(ui), uiText: toCss(over(text, ui)),
+    uiBorder: toCss(over(get('border_color') || [128, 128, 128, 0.4], ui)), shadow: toCss(get('shadow_color') || [0, 0, 0, 1]),
+  };
+  const t = clone(S.cur);
+  t.colors = colors; t.css = '';
+  t.name = String(j.name || '酒館主題').slice(0, 40);
+  if (typeof j.shadow_width === 'number') t.shadowWidth = clamp(j.shadow_width, 0, 10);
+  if (typeof j.font_scale === 'number') t.size = Math.round(clamp(18 * j.font_scale, 12, 36));
+  return t;
+}
+function importTheme(textValue) {
+  let j;
+  try { j = JSON.parse(textValue); } catch { toast('這段內容不是有效的 JSON，請確認有整段複製到'); return; }
+  if (!j || typeof j !== 'object') { toast('這段 JSON 裡沒有看到主題設定'); return; }
+  let t, note = '';
+  if ('main_text_color' in j) { t = fromSillyTavern(j); note = '（酒館主題：已帶入顏色、陰影和字級；酒館的自訂 CSS 是針對酒館介面寫的，所以沒有帶入）'; }
+  else if (j.colors && typeof j.colors === 'object') t = j;
+  else { toast('看不出這是哪種主題檔。目前支援本閱讀器匯出的主題，以及酒館的主題 JSON'); return; }
+  t = normTheme(t);
+  let name = t.name || '匯入的主題';
+  if (PRESETS.some(p => p.name === name)) name += '（匯入）';
+  t.name = name;
+  const i = S.user.findIndex(x => x.name === name);
+  if (i >= 0) S.user[i] = t; else S.user.push(t);
+  S.cur = normTheme(t); S.active = name; S.auto = false;
+  applyTheme(); saveState(); renderThemes(); syncControls();
+  toast(`已匯入並套用「${name}」${note}`, note ? 6500 : 3200);
+}
+
+/* ---------- uploaded fonts ---------- */
+async function registerFont(name, data) {
+  const family = 'up-' + name.replace(/[^\w一-鿿-]+/g, '_');
+  const ff = new FontFace(family, data);
+  await ff.load();
+  document.fonts.add(ff);
+  uploaded.set(name, family);
+}
+async function loadSavedFonts() {
+  const list = await idb('fonts', 'readonly', s => s.getAll());
+  for (const f of list || []) { try { await registerFont(f.name, f.data); } catch {} }
+  if (uploaded.size) { syncControls(); applyTheme(); }
+}
+async function uploadFont(file) {
+  const name = file.name.replace(/\.(ttf|otf|woff2?|ttc)$/i, '').slice(0, 40);
+  try {
+    const data = await file.arrayBuffer();
+    await registerFont(name, data.slice(0));
+    await idb('fonts', 'readwrite', s => s.put({ name, data }));
+    S.cur.font = 'up:' + name; syncControls(); changed();
+    toast(`已加入字型「${name}」並套用到內文`);
+  } catch { toast('這個字型檔讀不進來，可以換 ttf、otf 或 woff2 格式再試一次'); }
+}
+
+/* ---------- EPUB ---------- */
+const hasScheme = s => /^[a-z][a-z0-9+.-]*:/i.test(s) || s.startsWith('//');
+function resolvePath(base, rel) {
+  try {
+    const u = new URL(rel, 'http://e/' + base.split('/').map(encodeURIComponent).join('/'));
+    const dec = s => { try { return decodeURIComponent(s); } catch { return s; } };
+    return { path: dec(u.pathname.slice(1)), frag: dec(u.hash.slice(1)) };
+  } catch { return { path: rel, frag: '' }; }
+}
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', avif: 'image/avif', bmp: 'image/bmp',
+  ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2', css: 'text/css' };
+const mimeOf = p => MIME[(p.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
+function parseDoc(t, forceHtml) {
+  t = t.replace(/^﻿/, '');
+  if (!forceHtml) {
+    const d = new DOMParser().parseFromString(t, 'application/xhtml+xml');
+    if (!d.getElementsByTagName('parsererror').length) return d;
+  }
+  return new DOMParser().parseFromString(t, 'text/html');
+}
+const tags = (node, name) => [...node.getElementsByTagNameNS('*', name)];
+const kids = (node, name) => [...node.children].filter(c => c.localName === name);
+const tidy = s => (s || '').replace(/\s+/g, ' ').trim();
+
+class EpubBook {
+  static async open(buf, fileName) {
+    if (typeof JSZip === 'undefined') throw new Error('解壓縮元件沒有載入成功，請確認網路後重新整理頁面');
+    let zip;
+    try { zip = await JSZip.loadAsync(buf); } catch { throw new Error('這個檔案打不開，看起來不是 EPUB（或檔案有損壞）'); }
+    const b = new EpubBook();
+    b.zip = zip; b.lower = new Map(); b.urls = new Map(); b.cssCache = new Map(); b.types = new Map();
+    zip.forEach((p, f) => { if (!f.dir) b.lower.set(p.toLowerCase(), p); });
+    const cont = await b.text('META-INF/container.xml');
+    if (!cont) throw new Error('裡面找不到 META-INF/container.xml，這可能不是 EPUB 檔');
+    const rf = tags(new DOMParser().parseFromString(cont, 'application/xml'), 'rootfile')[0];
+    const opfPath = rf && rf.getAttribute('full-path');
+    const opfText = opfPath && await b.text(opfPath);
+    if (!opfText) throw new Error('找不到書本的內容清單（OPF），這個 EPUB 可能不完整');
+    const opf = new DOMParser().parseFromString(opfText.replace(/^﻿/, ''), 'application/xml');
+    const meta = n => { const e = tags(opf, n)[0]; return e ? tidy(e.textContent) : ''; };
+    b.title = meta('title') || (fileName || '未命名').replace(/\.epub$/i, '');
+    b.author = meta('creator');
+    const man = new Map();
+    for (const it of tags(opf, 'item')) {
+      const m = { href: resolvePath(opfPath, it.getAttribute('href') || '').path, type: it.getAttribute('media-type') || '', props: it.getAttribute('properties') || '' };
+      man.set(it.getAttribute('id'), m); b.types.set(m.href, m.type);
+    }
+    b.spine = tags(opf, 'itemref').map(r => man.get(r.getAttribute('idref'))).filter(m => m && b.entry(m.href)).map(m => ({ path: m.href }));
+    if (!b.spine.length) throw new Error('這本書裡沒有找到可以顯示的章節');
+    let toc = [];
+    const items = [...man.values()];
+    const nav = items.find(m => /(^|\s)nav(\s|$)/.test(m.props));
+    if (nav) toc = await b.parseNav(nav.href).catch(() => []);
+    if (!toc.length) {
+      const spineEl = tags(opf, 'spine')[0];
+      const ncx = (spineEl && man.get(spineEl.getAttribute('toc'))) || items.find(m => m.type === 'application/x-dtbncx+xml');
+      if (ncx) toc = await b.parseNcx(ncx.href).catch(() => []);
+    }
+    if (!toc.length) toc = b.spine.map((s, i) => ({ label: `第 ${i + 1} 節`, path: s.path, frag: '', kids: [] }));
+    b.toc = toc;
+    let cover = items.find(m => /(^|\s)cover-image(\s|$)/.test(m.props));
+    if (!cover) { const cm = tags(opf, 'meta').find(m => m.getAttribute('name') === 'cover'); if (cm) cover = man.get(cm.getAttribute('content')); }
+    if (cover && /^image\//.test(cover.type) && b.entry(cover.href)) {
+      try { b.cover = new Blob([await b.entry(cover.href).async('arraybuffer')], { type: cover.type }); } catch {}
+    }
+    return b;
+  }
+  entry(p) { return this.zip.file(p) || (this.lower.has(p.toLowerCase()) ? this.zip.file(this.lower.get(p.toLowerCase())) : null); }
+  async text(p) { const f = this.entry(p); return f ? f.async('string') : null; }
+  async url(p) {
+    if (this.urls.has(p)) return this.urls.get(p);
+    const f = this.entry(p);
+    let u = null;
+    if (f) { try { u = URL.createObjectURL(new Blob([await f.async('arraybuffer')], { type: this.types.get(p) || mimeOf(p) })); } catch {} }
+    this.urls.set(p, u);
+    return u;
+  }
+  async parseNav(path) {
+    const t = await this.text(path); if (!t) return [];
+    const d = parseDoc(t);
+    const navs = tags(d, 'nav');
+    const nav = navs.find(n => /(^|\s)toc(\s|$)/.test(n.getAttribute('epub:type') || '')) || navs[0];
+    const ol = nav && tags(nav, 'ol')[0];
+    const walk = list => kids(list, 'li').map(li => {
+      const a = [...li.children].find(c => c.localName === 'a' || c.localName === 'span');
+      const sub = kids(li, 'ol')[0];
+      const href = a && a.getAttribute('href');
+      const r = href && !hasScheme(href) ? resolvePath(path, href) : null;
+      return { label: tidy(a && a.textContent) || '（未命名）', path: r ? r.path : null, frag: r ? r.frag : '', kids: sub ? walk(sub) : [] };
+    });
+    return ol ? walk(ol) : [];
+  }
+  async parseNcx(path) {
+    const t = await this.text(path); if (!t) return [];
+    const d = new DOMParser().parseFromString(t.replace(/^﻿/, ''), 'application/xml');
+    const map = tags(d, 'navMap')[0];
+    const walk = node => kids(node, 'navPoint').map(np => {
+      const lab = kids(np, 'navLabel')[0], con = kids(np, 'content')[0];
+      const src = con && con.getAttribute('src');
+      const r = src ? resolvePath(path, src) : null;
+      return { label: tidy(lab && lab.textContent) || '（未命名）', path: r ? r.path : null, frag: r ? r.frag : '', kids: walk(np) };
+    });
+    return map ? walk(map) : [];
+  }
+  close() { for (const u of this.urls.values()) if (u) URL.revokeObjectURL(u); this.urls.clear(); }
+}
+
+/* built-in sample so the page opens in a working state */
+const SAMPLE = {
+  id: 'sample', sample: true, html: true, title: '示範書：先試試換主題', author: '閱讀器內建的範例文字',
+  spine: [{ path: 'c1' }, { path: 'c2' }, { path: 'c3' }],
+  toc: [
+    { label: '這是一本示範書', path: 'c1', frag: '', kids: [] },
+    { label: '換一個主題看看', path: 'c2', frag: '', kids: [] },
+    { label: '打開你自己的書', path: 'c3', frag: '', kids: [] },
+  ],
+  files: {
+    c1: `<h1>這是一本示範書</h1>
+<p>這幾頁是閱讀器內建的範例文字，讓你還沒打開任何書之前，就能先看到主題換起來的樣子。它不是你的書，打開自己的 EPUB 之後就可以把它忘了。</p>
+<p>雨下了一整個下午，舊書店的燈比外頭的天色還暖一點。</p>
+<p>「所以引號裡面的字會自己變色？」她把那本書舉到燈下，像在檢查一張鈔票。</p>
+<p>「會。」老闆頭也沒抬，「<em>斜體字也有自己的顏色</em>，<u>畫了底線的字</u>也是。跟酒館裡看聊天的時候一樣，誰在說話、誰在心裡想，一眼就分得出來。」</p>
+<p>「『跟酒館一樣』，」她重複了一次，「那我要一個晚上看的顏色。」</p>
+<p>他終於抬頭，朝右上角指了指。<em>那裡有一顆寫著「主題」的按鈕。</em></p>
+<blockquote><p>書頁的顏色、字的顏色、字型、行距，都算在「主題」裡面。調到順眼之後，可以取個名字存起來。</p></blockquote>
+<p>句子後面如果有小註記<a epub:type="noteref" href="#n1">［註］</a>，點一下會跳出小視窗，不會把你帶離正在讀的地方。</p>
+<aside epub:type="footnote" id="n1"><p>這是 EPUB 3 的註腳。用 Chat2Ebook 匯出的電子書，「思維鏈」和「其他版本」也是用同一種註腳做的，所以在這裡同樣會以小視窗顯示。</p></aside>`,
+    c2: `<h1>換一個主題看看</h1>
+<p>按右上角的「主題」，設定面板會停在書頁旁邊，每動一個選項，書頁就跟著變。</p>
+<h2>面板裡有什麼</h2>
+<ul>
+<li><strong>主題</strong>：幾組內建配色，點一下就換。下面可以把現在的樣子存成自己的主題。</li>
+<li><strong>顏色</strong>：背景、紙張、主文字、斜體字、引號文字、底線文字、標題、連結，還有介面本身的顏色。</li>
+<li><strong>文字</strong>：字型、字級、行高、段落間距、字距、首行縮排。字型可以用系統內建的、網路字型，或是上傳自己的字型檔。</li>
+<li><strong>版面</strong>：上下捲動或左右分頁、頁面寬度、頁邊留白。</li>
+<li><strong>自訂 CSS</strong>：想要更細的調整，可以自己寫樣式。</li>
+</ul>
+<h2>從酒館搬主題過來</h2>
+<p>在酒館匯出的主題 JSON 可以直接匯入：主文字、斜體、引號、底線這幾個顏色，還有陰影和字級，會對應到這裡的設定。</p>
+<p>「那酒館主題裡的自訂 CSS 呢？」</p>
+<p>「那是寫給酒館介面用的，搬過來也對不上，所以不會帶進來。」</p>`,
+    c3: `<h1>打開你自己的書</h1>
+<p>按左上角的「書架」，選「開啟 EPUB 檔案」；或是直接把 .epub 檔拖進這個視窗。</p>
+<p>開過的書會留在這個瀏覽器的書架上，下次回來會從上次讀到的地方接著看。書架上的書只存在你這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
+<h2>幾個小操作</h2>
+<ul>
+<li>「目錄」可以跳章節，底下的橫條可以拖到全書的任何位置。</li>
+<li>分頁模式下，點畫面左右兩側翻頁，點中間可以收起工具列。</li>
+<li>鍵盤的左右方向鍵：分頁模式是翻頁，捲動模式是換章。</li>
+</ul>
+<p>「就這樣？」</p>
+<p>「就這樣。<em>剩下的，就是找一本想看的書。</em>」</p>`,
+  },
+  async text(p) { return this.files[p] == null ? null : this.files[p]; },
+  async url() { return null; },
+  cssCache: new Map(),
+  close() {},
+};
+
+/* ---------- chapter preparation: CSS + sanitising ---------- */
+const URL_RE = /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi;
+const SEL_RE = /(^|[\s,>+~(])(html|body)(?![\w-])/gi;
+async function prepCss(text, base, book) {
+  text = text.replace(/@import[^;]*;/gi, '').replace(/@charset[^;]*;/gi, '');
+  const map = new Map();
+  for (const m of text.matchAll(URL_RE)) {
+    const u = m[2].trim();
+    if (map.has(u) || /^data:(image|font)\//i.test(u)) continue;
+    map.set(u, hasScheme(u) || !u ? '' : (await book.url(resolvePath(base, u).path)) || '');
+  }
+  text = text.replace(URL_RE, (m, q, u) => { u = u.trim(); return map.has(u) ? `url("${map.get(u) || 'about:invalid'}")` : m; });
+  text = text.replace(/position\s*:\s*(fixed|sticky)/gi, 'position:static');
+  let fonts = '';
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    const fix = rules => {
+      for (const r of rules) {
+        if (typeof r.selectorText === 'string') { try { r.selectorText = r.selectorText.replace(SEL_RE, '$1.bk-$2').replace(/:root/gi, '.bk-html'); } catch {} }
+        else if (r.cssRules) fix(r.cssRules);
+      }
+    };
+    fix(sheet.cssRules);
+    const out = [];
+    for (const r of sheet.cssRules) { if (r instanceof CSSFontFaceRule) fonts += r.cssText + '\n'; else out.push(r.cssText); }
+    text = out.join('\n');
+  } catch {
+    text = text.replace(/(^|[},\s>+~])(html|body)(?=[\s,{.:#\[>+~])/gi, '$1.bk-$2');
+  }
+  return { css: text, fonts };
+}
+const cleanInline = s => s.replace(/url\(\s*(['"]?)(?!data:image\/)[^)]*\)/gi, 'none')
+  .replace(/position\s*:\s*(fixed|sticky)/gi, 'position:static').replace(/expression\s*\(|behavior\s*:|-moz-binding/gi, 'x-removed');
+const DROP = new Set(['script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet', 'link', 'meta', 'base', 'style', 'noscript', 'template',
+  'form', 'input', 'button', 'select', 'textarea', 'audio', 'video', 'source', 'track', 'title', 'head', 'foreignobject']);
+const SAFE_DATA_IMG = /^data:image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml)[;,]/i;
+async function sanitize(body, path, book) {
+  for (const n of [...body.querySelectorAll('*')]) {
+    const ln = n.localName.toLowerCase();
+    if (DROP.has(ln)) { n.remove(); continue; }
+    let href = null, src = null;
+    for (const at of [...n.attributes]) {
+      const an = at.name.toLowerCase(), al = at.localName.toLowerCase();
+      if (an.startsWith('on') || ['srcset', 'ping', 'action', 'formaction', 'poster', 'background', 'target', 'download'].includes(an)) { n.removeAttribute(at.name); continue; }
+      if (an === 'style') { at.value = cleanInline(at.value); continue; }
+      if (al === 'href') { href = at.value.trim(); n.removeAttribute(at.name); continue; }
+      if (al === 'src') { src = at.value.trim(); n.removeAttribute(at.name); continue; }
+    }
+    if (ln === 'img' || ln === 'image') {
+      const ref = ln === 'img' ? src : (href || src);
+      const key = ln === 'img' ? 'src' : 'href';
+      if (ref && SAFE_DATA_IMG.test(ref)) n.setAttribute(key, ref);
+      else if (ref && !hasScheme(ref)) { const u = await book.url(resolvePath(path, ref).path); if (u) n.setAttribute(key, u); }
+      else if (ref) n.setAttribute('data-bk-blocked', '');
+      if (ln === 'img') { n.setAttribute('loading', 'eager'); n.setAttribute('decoding', 'async'); }
+    } else if (ln === 'a' && href) {
+      if (/^https?:\/\//i.test(href)) { n.setAttribute('href', href); n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener noreferrer'); }
+      else if (!hasScheme(href)) {
+        const r = resolvePath(path, href);
+        n.setAttribute('data-bk-path', r.path); n.setAttribute('data-bk-frag', r.frag);
+        n.setAttribute('role', 'link'); n.setAttribute('tabindex', '0');
+      }
+    } else if (href && href.startsWith('#')) n.setAttribute('href', href);
+    const kind = (n.getAttribute('epub:type') || '') + ' ' + (n.getAttribute('role') || '');
+    if (/noteref/.test(kind)) n.classList.add('bk-noteref');
+    if (ln === 'aside' && /(^|[\s-])(footnote|endnote|rearnote)(\s|$)/.test(kind)) n.classList.add('bk-fn');
+  }
+}
+async function buildChapter(book, i) {
+  const path = book.spine[i].path;
+  const txt = await book.text(path);
+  if (txt == null) throw new Error('這一章的內容讀不出來');
+  const doc = parseDoc(txt, book.html);
+  let css = '', fonts = '';
+  if (S.settings.bookCss !== 'off') {
+    for (const n of doc.querySelectorAll('link, style')) {
+      let t = null, base = path, cacheKey = null;
+      if (n.localName === 'link') {
+        const hr = n.getAttribute('href');
+        if (!/stylesheet/i.test(n.getAttribute('rel') || '') || !hr || hasScheme(hr)) continue;
+        base = cacheKey = resolvePath(path, hr).path;
+        if (book.cssCache.has(cacheKey)) { const r = book.cssCache.get(cacheKey); css += r.css + '\n'; fonts += r.fonts; continue; }
+        t = await book.text(base);
+      } else t = n.textContent;
+      if (!t) continue;
+      const r = await prepCss(t, base, book);
+      if (cacheKey) book.cssCache.set(cacheKey, r);
+      css += r.css + '\n'; fonts += r.fonts;
+    }
+  }
+  const body = doc.querySelector('body') || doc.documentElement;
+  await sanitize(body, path, book);
+  const imp = document.importNode(body, true);
+  return { nodes: [...imp.childNodes], cls: body.getAttribute('class') || '', css, fonts };
+}
+
+/* quote colouring, the way a chat front-end tints dialogue */
+const OPENERS = { '「': '」', '『': '』', '“': '”', '«': '»' };
+const BLOCK_RE = /^(p|div|li|td|th|h[1-6]|blockquote|dd|dt|section|article|aside|br|hr|tr|table|ul|ol|details|summary|figure|figcaption)$/;
+const SKIP_Q = new Set(['q', 'pre', 'code', 'script', 'style', 'rt', 'rp', 'kbd', 'samp', 'svg', 'math']);
+function colorQuotes(rootEl) {
+  const tw = document.createTreeWalker(rootEl, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: n => n.nodeType === 1 && SKIP_Q.has(n.localName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  let stack = [];
+  const jobs = [];
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+    if (n.nodeType === 1) { if (BLOCK_RE.test(n.localName)) stack = []; continue; }
+    const s = n.nodeValue, ranges = [];
+    const carried = stack.length > 0 && !!n.parentElement.closest('em,i,cite,dfn,u,ins,a');
+    let start = stack.length ? 0 : -1;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (stack.length && ch === stack[stack.length - 1]) { stack.pop(); if (!stack.length) { if (!(carried && start === 0)) ranges.push([start, i + 1]); start = -1; } }
+      else if (ch === '"' || OPENERS[ch]) { stack.push(ch === '"' ? '"' : OPENERS[ch]); if (stack.length === 1) start = i; }
+    }
+    if (stack.length && start >= 0 && start < s.length && !(carried && start === 0)) ranges.push([start, s.length]);
+    if (ranges.length) jobs.push([n, ranges]);
+  }
+  for (const [n, ranges] of jobs) {
+    const s = n.nodeValue, frag = document.createDocumentFragment();
+    let pos = 0;
+    for (const [a, b] of ranges) {
+      if (a > pos) frag.append(s.slice(pos, a));
+      frag.append(h('span', { class: 'bk-q', text: s.slice(a, b) }));
+      pos = b;
+    }
+    if (pos < s.length) frag.append(s.slice(pos));
+    n.replaceWith(frag);
+  }
+}
+
+/* ---------- reader ---------- */
+const R = { book: null, idx: 0, page: 0, pages: 1, token: 0, flat: [] };
+const paged = () => S.settings.mode === 'paged';
+const GAP = 48;
+function currentFrac() {
+  if (paged()) return R.pages > 1 ? R.page / (R.pages - 1) : 0;
+  const max = vp.scrollHeight - vp.clientHeight;
+  return max > 4 ? clamp(vp.scrollTop / max, 0, 1) : 0;
+}
+function setFrac(f) {
+  if (paged()) { R.page = Math.round(clamp(f, 0, 1) * (R.pages - 1)); applyPage(false); }
+  else vp.scrollTop = clamp(f, 0, 1) * Math.max(0, vp.scrollHeight - vp.clientHeight);
+}
+function measure() {
+  if (!paged()) { htmlEl.style.transform = ''; R.pages = 1; R.page = 0; return; }
+  const W = host.clientWidth, H = host.clientHeight;
+  if (!W || !H) return;
+  host.style.setProperty('--pg-w', W + 'px'); host.style.setProperty('--pg-h', H + 'px');
+  R.W = W;
+  R.pages = Math.max(1, Math.round((htmlEl.scrollWidth + GAP) / (W + GAP)));
+}
+function applyPage(animate) {
+  R.page = clamp(R.page, 0, R.pages - 1);
+  host.classList.toggle('anim', !!animate);
+  htmlEl.style.transform = `translateX(${-R.page * (R.W + GAP)}px)`;
+  updateProgress();
+}
+let layoutRaf = 0;
+function scheduleLayout() {
+  if (layoutRaf || !R.book) return;
+  const f = currentFrac();
+  layoutRaf = requestAnimationFrame(() => {
+    layoutRaf = 0;
+    if (paged()) { measure(); R.page = Math.round(f * (R.pages - 1)); applyPage(false); }
+    updateProgress();
+  });
+}
+function findAnchor(frag) {
+  if (!frag) return null;
+  try { return bodyEl.querySelector('#' + CSS.escape(frag)) || bodyEl.querySelector(`[name="${CSS.escape(frag)}"]`); } catch { return null; }
+}
+function jumpTo(elm) {
+  if (!elm) return;
+  if (paged()) {
+    const x = elm.getBoundingClientRect().left - htmlEl.getBoundingClientRect().left;
+    R.page = Math.floor((x + 1) / (R.W + GAP)); applyPage(false);
+  } else vp.scrollTop += elm.getBoundingClientRect().top - vp.getBoundingClientRect().top - 16;
+}
+async function show(i, where) {
+  const book = R.book; if (!book) return;
+  i = clamp(i, 0, book.spine.length - 1);
+  const token = ++R.token;
+  closePop();
+  let ch;
+  try { ch = await buildChapter(book, i); }
+  catch (e) { ch = { nodes: [h('p', { class: 'bk-msg', text: (e && e.message) || '這一章顯示不出來' })], cls: '', css: '', fonts: '' }; }
+  if (token !== R.token) return;
+  bodyEl.className = 'bk-body ' + ch.cls;
+  bodyEl.replaceChildren(...ch.nodes);
+  stBook.textContent = ch.css;
+  stForce.textContent = S.settings.bookCss === 'keep' ? '' : FORCE_CSS;
+  $('#book-fonts').textContent = ch.fonts;
+  if (S.settings.quotes) colorQuotes(bodyEl);
+  R.idx = i;
+  vp.scrollTop = 0; R.page = 0;
+  measure();
+  if (where && where.frag && findAnchor(where.frag)) jumpTo(findAnchor(where.frag));
+  else if (where && where.frac != null) setFrac(where.frac);
+  else if (paged()) applyPage(false);
+  updateChrome(); savePos();
+}
+const rerender = () => R.book && show(R.idx, { frac: currentFrac() });
+function setMode(mode) {
+  const f = R.book ? currentFrac() : 0;
+  S.settings.mode = mode; saveState();
+  app.classList.toggle('paged', paged()); host.classList.toggle('paged', paged());
+  $$('#mode-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  requestAnimationFrame(() => { measure(); setFrac(f); updateProgress(); });
+}
+function nextPage() {
+  if (!paged()) return;
+  if (R.page < R.pages - 1) { R.page++; applyPage(true); savePos(); }
+  else if (R.idx < R.book.spine.length - 1) show(R.idx + 1);
+  else toast('已經是最後一頁了');
+}
+function prevPage() {
+  if (!paged()) return;
+  if (R.page > 0) { R.page--; applyPage(true); savePos(); }
+  else if (R.idx > 0) show(R.idx - 1, { frac: 1 });
+}
+const nextChapter = () => { if (R.book && R.idx < R.book.spine.length - 1) show(R.idx + 1); else toast('已經是最後一章了'); };
+const prevChapter = () => { if (R.book && R.idx > 0) show(R.idx - 1); };
+function gotoHref(path, frag) {
+  const i = R.book.spine.findIndex(s => s.path === path);
+  if (i < 0) { toast('這個連結指到的章節不在書裡'); return; }
+  if (i === R.idx) { const a = findAnchor(frag); if (a) jumpTo(a); else setFrac(0); savePos(); }
+  else show(i, { frag });
+}
+
+/* footnote popup */
+function openPop(target) {
+  const c = target.cloneNode(true);
+  c.classList.remove('bk-fn'); c.removeAttribute('id');
+  c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  c.querySelectorAll('a[data-bk-frag]').forEach(a => {
+    if (/^[\s]*[↩⏎←↑^]|返回/.test(a.textContent)) { const p = a.parentElement; a.remove(); if (p && p !== c && !p.textContent.trim() && !p.children.length) p.remove(); }
+  });
+  popBody.replaceChildren(c);
+  popEl.hidden = false;
+  popEl.firstElementChild.scrollTop = 0;
+  popClose.focus({ preventScroll: true });
+}
+function closePop() { if (!popEl.hidden) { popEl.hidden = true; popBody.replaceChildren(); } }
+function activateLink(a, e) {
+  const path = a.getAttribute('data-bk-path');
+  if (path == null) return false;           // external link: let the browser handle it
+  e.preventDefault();
+  const frag = a.getAttribute('data-bk-frag') || '';
+  if (path === R.book.spine[R.idx].path) {
+    const t = findAnchor(frag);
+    const fn = t && t.closest('.bk-fn');
+    if (fn) { openPop(t.classList.contains('bk-fn') ? t : fn); return true; }
+    if (a.classList.contains('bk-noteref') && t) { openPop(t); return true; }
+  }
+  closePop();
+  gotoHref(path, frag);
+  return true;
+}
+
+/* chrome */
+function flattenToc(list, depth = 0, out = []) { for (const t of list) { out.push({ ...t, depth }); flattenToc(t.kids || [], depth + 1, out); } return out; }
+function currentTocIndex() {
+  const path = R.book.spine[R.idx].path;
+  let idx = R.flat.findIndex(t => t.path === path);
+  if (idx < 0) { // nearest earlier spine item that has a toc entry
+    for (let i = R.idx - 1; i >= 0 && idx < 0; i--) idx = R.flat.findIndex(t => t.path === R.book.spine[i].path);
+  }
+  return idx;
+}
+function updateChrome() {
+  const b = R.book; if (!b) return;
+  $('#book-title').textContent = b.title;
+  const ti = currentTocIndex();
+  $('#chap-title').textContent = ti >= 0 ? R.flat[ti].label : `第 ${R.idx + 1} 節`;
+  const last = R.idx >= b.spine.length - 1, first = R.idx <= 0;
+  $('#btn-prev').disabled = $('#end-prev').disabled = first;
+  $('#btn-next').disabled = $('#end-next').disabled = last;
+  $('#end-prev').hidden = first; $('#end-next').hidden = last;
+  $$('#toc-list button').forEach((btn, i) => btn.setAttribute('aria-current', String(i === ti)));
+  updateProgress();
+}
+function updateProgress() {
+  const b = R.book; if (!b) return;
+  const n = b.spine.length, p = clamp((R.idx + currentFrac()) / n, 0, 1);
+  const done = R.idx === n - 1 && currentFrac() > 0.995;
+  if (document.activeElement !== $('#progress')) $('#progress').value = Math.round(p * 1000);
+  $('#progress-text').textContent = `${done ? 100 : Math.floor(p * 100)}% · ${R.idx + 1}/${n}`;
+}
+let posTimer = 0;
+function savePos() {
+  clearTimeout(posTimer);
+  posTimer = setTimeout(() => {
+    if (!R.book) return;
+    const all = LS.get('moye.pos', {});
+    all[R.book.id] = { i: R.idx, f: +currentFrac().toFixed(4), n: R.book.spine.length };
+    LS.set('moye.pos', all);
+  }, 300);
+}
+function renderToc() {
+  const ul = $('#toc-list'); ul.replaceChildren();
+  R.flat = flattenToc(R.book.toc);
+  for (const t of R.flat) {
+    const btn = h('button', { type: 'button', text: t.label });
+    btn.style.paddingLeft = (0.6 + t.depth * 1.1) + 'em';
+    if (t.path == null) btn.disabled = true;
+    btn.addEventListener('click', () => { closeDrawer(); gotoHref(t.path, t.frag); });
+    ul.append(h('li', {}, btn));
+  }
+}
+
+/* ---------- books & shelf ---------- */
+function hashId(s) { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return 'b' + x.toString(36); }
+async function openBook(book) {
+  if (R.book && R.book !== book) R.book.close();
+  R.book = book;
+  LS.set('moye.last', book.id);
+  renderToc();
+  const pos = LS.get('moye.pos', {})[book.id];
+  await show(pos ? pos.i : 0, pos ? { frac: pos.f } : null);
+  renderShelf();
+}
+async function openFile(file) {
+  if (!file) return;
+  toast('正在打開《' + file.name.replace(/\.epub$/i, '') + '》…', 15000);
+  try {
+    const buf = await file.arrayBuffer();
+    const book = await EpubBook.open(buf, file.name);
+    book.id = hashId(book.title + '|' + book.author + '|' + buf.byteLength);
+    await idb('books', 'readwrite', s => s.put({ id: book.id, title: book.title, author: book.author, cover: book.cover || null, added: Date.now(), size: buf.byteLength }));
+    await idb('data', 'readwrite', s => s.put({ id: book.id, buf }));
+    await openBook(book);
+    closeDrawer();
+    toast(`已打開《${book.title}》`);
+  } catch (e) { toast((e && e.message) || '這個檔案打不開', 6000); }
+}
+async function openStored(id) {
+  if (id === 'sample') { await openBook(SAMPLE); return true; }
+  const rec = await idb('data', 'readonly', s => s.get(id));
+  const metaRec = await idb('books', 'readonly', s => s.get(id));
+  if (!rec || !rec.buf) return false;
+  try {
+    const book = await EpubBook.open(rec.buf, (metaRec && metaRec.title) || '');
+    book.id = id;
+    await openBook(book);
+    return true;
+  } catch (e) { toast((e && e.message) || '這本書打不開', 6000); return false; }
+}
+const coverUrls = [];
+async function renderShelf() {
+  const list = $('#shelf-list');
+  const books = (await idb('books', 'readonly', s => s.getAll())) || [];
+  books.sort((a, b) => b.added - a.added);
+  coverUrls.splice(0).forEach(u => URL.revokeObjectURL(u));
+  const pos = LS.get('moye.pos', {});
+  list.replaceChildren();
+  const add = (b, sample) => {
+    let cov;
+    if (b.cover) { const u = URL.createObjectURL(b.cover); coverUrls.push(u); cov = h('img', { class: 'cover', src: u, alt: '' }); }
+    else cov = h('span', { class: 'cover', 'aria-hidden': 'true', text: (b.title || '書').trim().slice(0, 1) });
+    const p = pos[b.id];
+    const pct = p && p.n ? Math.floor(clamp((p.i + p.f) / p.n, 0, 1) * 100) : 0;
+    const title = h('b', { text: b.title });
+    if (sample) title.append(h('span', { class: 'tag', text: '範例' }));
+    const open = h('button', { class: 'shelf-open', type: 'button' }, cov,
+      h('span', { class: 'shelf-meta' }, title, h('span', { text: [b.author, p ? `讀到 ${pct}%` : '還沒開始'].filter(Boolean).join(' · ') })));
+    open.addEventListener('click', async () => { if (await openStored(b.id)) closeDrawer(); });
+    const item = h('div', { class: 'shelf-item' + (R.book && R.book.id === b.id ? ' current' : '') }, open);
+    if (!sample) {
+      const del = h('button', { class: 'btn ghost', type: 'button', text: '移除', 'aria-label': `從書架移除 ${b.title}` });
+      let armed = 0;
+      del.addEventListener('click', async () => {
+        if (!armed) { armed = setTimeout(() => { armed = 0; del.textContent = '移除'; }, 3000); del.textContent = '確定？'; return; }
+        clearTimeout(armed);
+        await idb('books', 'readwrite', s => s.delete(b.id));
+        await idb('data', 'readwrite', s => s.delete(b.id));
+        if (R.book && R.book.id === b.id) await openBook(SAMPLE);
+        renderShelf(); toast(`已把《${b.title}》從書架移除`);
+      });
+      item.append(del);
+    }
+    list.append(item);
+  };
+  books.forEach(b => add(b, false));
+  add({ id: 'sample', title: SAMPLE.title, author: SAMPLE.author }, true);
+}
+
+/* ---------- drawer / panel ---------- */
+function openDrawer(tab) {
+  $('#drawer').hidden = false; $('#scrim').hidden = false;
+  $$('[data-dtab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.dtab === tab)));
+  $$('[data-dpane]').forEach(p => { p.hidden = p.dataset.dpane !== tab; });
+  if (tab === 'shelf') renderShelf();
+  else { const cur = $('#toc-list [aria-current="true"]'); if (cur) cur.scrollIntoView({ block: 'center' }); }
+}
+function closeDrawer() { $('#drawer').hidden = true; $('#scrim').hidden = true; }
+function setPanel(open) {
+  const f = R.book ? currentFrac() : 0;
+  $('#panel').hidden = !open; app.classList.toggle('panel-open', open); app.classList.remove('immersive');
+  $('#btn-theme').setAttribute('aria-pressed', String(open));
+  LS.set('moye.panel', open);
+  requestAnimationFrame(() => { measure(); setFrac(f); updateProgress(); });
+}
+function setTab(name) {
+  $$('#panel [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  $$('#panel [data-pane]').forEach(p => { p.hidden = p.dataset.pane !== name; });
+  LS.set('moye.tab', name);
+}
+let immersiveHinted = false;
+function toggleImmersive() {
+  if (app.classList.contains('panel-open')) return;
+  const f = currentFrac();
+  const on = app.classList.toggle('immersive');
+  if (on && !immersiveHinted) { immersiveHinted = true; toast('工具列收起來了，再點一下畫面中間可以叫回來'); }
+  requestAnimationFrame(() => { measure(); setFrac(f); });
+}
+
+/* ---------- events ---------- */
+vp.addEventListener('click', e => {
+  const path = e.composedPath();
+  if (path.includes(popEl)) {
+    if (path[0] === popEl || path.includes(popClose)) closePop();
+    else { const a = path.find(n => n.nodeType === 1 && n.localName === 'a'); if (a) activateLink(a, e); }
+    return;
+  }
+  const a = path.find(n => n.nodeType === 1 && n.localName === 'a');
+  if (a) { activateLink(a, e); return; }
+  if (path.some(n => n.nodeType === 1 && /^(summary|button|input|select|textarea|label)$/.test(n.localName))) return;
+  const sel = window.getSelection && getSelection();
+  if (sel && !sel.isCollapsed) return;
+  if (paged()) {
+    const r = vp.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+    if (x < 0.3) prevPage(); else if (x > 0.7) nextPage(); else toggleImmersive();
+  } else if (e.pointerType && e.pointerType !== 'mouse') toggleImmersive();
+});
+vp.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const a = e.composedPath().find(n => n.nodeType === 1 && n.localName === 'a' && n.hasAttribute('data-bk-path'));
+  if (a) activateLink(a, e);
+});
+let scrollRaf = 0;
+vp.addEventListener('scroll', () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; updateProgress(); savePos(); }); }, { passive: true });
+let tx0 = null;
+vp.addEventListener('touchstart', e => { tx0 = e.touches.length === 1 ? [e.touches[0].clientX, e.touches[0].clientY] : null; }, { passive: true });
+vp.addEventListener('touchend', e => {
+  if (!tx0 || !paged() || !popEl.hidden) return;
+  const t = e.changedTouches[0], dx = t.clientX - tx0[0], dy = t.clientY - tx0[1];
+  tx0 = null;
+  if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) nextPage(); else prevPage(); }
+}, { passive: true });
+let wheelAt = 0;
+vp.addEventListener('wheel', e => {
+  if (!paged() || !popEl.hidden) return;
+  const now = Date.now(); if (now - wheelAt < 260 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 12) return;
+  wheelAt = now;
+  if (e.deltaY + e.deltaX > 0) nextPage(); else prevPage();
+}, { passive: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!popEl.hidden) closePop(); else if (!$('#drawer').hidden) closeDrawer(); else if (app.classList.contains('immersive')) toggleImmersive();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof HTMLElement) || e.target.closest('input, textarea, select')) return;
+  if (e.key === ' ' && e.target.closest('button, summary, a')) return;
+  if (!$('#drawer').hidden || !popEl.hidden || !R.book) return;
+  if (paged()) {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); nextPage(); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); prevPage(); }
+  } else {
+    if (e.key === 'ArrowRight') nextChapter(); else if (e.key === 'ArrowLeft') prevChapter();
+  }
+});
+bodyEl.addEventListener('load', scheduleLayout, true);
+try { new ResizeObserver(scheduleLayout).observe(vp); } catch { addEventListener('resize', scheduleLayout); }
+
+$('#btn-toc').addEventListener('click', () => openDrawer('toc'));
+$('#btn-shelf').addEventListener('click', () => openDrawer('shelf'));
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#scrim').addEventListener('click', closeDrawer);
+$$('[data-dtab]').forEach(b => b.addEventListener('click', () => openDrawer(b.dataset.dtab)));
+$('#btn-theme').addEventListener('click', () => setPanel($('#panel').hidden));
+$('#panel-close').addEventListener('click', () => setPanel(false));
+$$('#panel [data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+$('#btn-prev').addEventListener('click', prevChapter); $('#end-prev').addEventListener('click', prevChapter);
+$('#btn-next').addEventListener('click', nextChapter); $('#end-next').addEventListener('click', nextChapter);
+$('#progress').addEventListener('change', e => {
+  if (!R.book) return;
+  const n = R.book.spine.length, v = clamp(+e.target.value / 1000, 0, 1) * n;
+  const i = Math.min(n - 1, Math.floor(v));
+  e.target.blur();
+  if (i === R.idx) { setFrac(v - i); savePos(); } else show(i, { frac: v - i });
+});
+$('#btn-open').addEventListener('click', () => $('#file-epub').click());
+$('#file-epub').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; openFile(f); });
+$('#theme-save').addEventListener('click', saveTheme);
+$('#theme-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveTheme(); });
+$('#theme-export').addEventListener('click', exportTheme);
+$('#theme-import').addEventListener('click', () => {
+  $('#io-box').hidden = false; $('#io-text').value = '';
+  $('#io-hint').textContent = '把主題 JSON 貼在下面再按「套用這段 JSON」，或是直接選 JSON 檔。這個閱讀器匯出的主題和酒館的主題 JSON 都可以。';
+  $('#io-text').focus();
+});
+$('#io-apply').addEventListener('click', () => { const v = $('#io-text').value.trim(); if (!v) { toast('先把主題 JSON 貼進來，或按「選 JSON 檔」'); return; } importTheme(v); });
+$('#io-copy').addEventListener('click', async () => {
+  const ta = $('#io-text');
+  if (!ta.value) { toast('目前沒有內容可以複製，先按「匯出目前主題」'); return; }
+  try { await navigator.clipboard.writeText(ta.value); toast('已複製主題 JSON'); }
+  catch { ta.focus(); ta.select(); toast('已經幫你全選，按 Ctrl/⌘ + C 複製'); }
+});
+$('#io-download').addEventListener('click', () => {
+  const v = $('#io-text').value.trim();
+  if (!v) { toast('目前沒有內容可以下載，先按「匯出目前主題」'); return; }
+  let name = '墨頁主題';
+  try { name = (JSON.parse(v).name || name).replace(/[\\/:*?"<>|]/g, '_'); } catch {}
+  const u = URL.createObjectURL(new Blob([v], { type: 'application/json' }));
+  const a = h('a', { href: u, download: name + '.json' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 4000);
+});
+$('#io-file-btn').addEventListener('click', () => $('#file-theme').click());
+$('#file-theme').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) { const t = await f.text(); $('#io-text').value = t; importTheme(t); } });
+$('#f-upload-btn').addEventListener('click', () => $('#file-font').click());
+$('#file-font').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) uploadFont(f); });
+
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+addEventListener('dragenter', e => { if (hasFiles(e)) { dragDepth++; $('#drop-hint').hidden = false; } });
+addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('#drop-hint').hidden = true; } });
+addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('#drop-hint').hidden = true;
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  if (/\.json$/i.test(f.name)) f.text().then(importTheme);
+  else if (/\.(ttf|otf|woff2?)$/i.test(f.name)) uploadFont(f);
+  else openFile(f);
+});
+
+/* follow the host's light/dark setting until the reader picks a theme */
+function followHost() {
+  if (!S.auto) return;
+  const p = autoPreset();
+  S.cur.colors = { ...p.colors }; S.active = p.name;
+  applyTheme(); syncControls(); renderThemes();
+}
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followHost); } catch {}
+try { new MutationObserver(followHost).observe(root, { attributes: true, attributeFilter: ['data-theme'] }); } catch {}
+
+/* ---------- installed-app extras ---------- */
+// A book sent to the app from the phone's share sheet is parked in a cache by the service worker.
+async function takeSharedFile() {
+  if (!/[?&]shared=1/.test(location.search)) return null;
+  try { history.replaceState(null, '', location.pathname); } catch {}
+  try {
+    const cache = await caches.open('moye-shared');
+    const res = await cache.match('shared-book');
+    if (!res) return null;
+    const blob = await res.blob();
+    let name = 'book.epub';
+    try { name = decodeURIComponent(res.headers.get('x-name') || name); } catch {}
+    await cache.delete('shared-book');
+    return new File([blob], name, { type: blob.type });
+  } catch { return null; }
+}
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+try {
+  if ('launchQueue' in window) launchQueue.setConsumer(async p => {
+    if (p && p.files && p.files.length) openFile(await p.files[0].getFile());
+  });
+} catch {}
+
+/* ---------- start ---------- */
+(async function start() {
+  buildControls();
+  app.classList.toggle('paged', paged()); host.classList.toggle('paged', paged());
+  applyTheme(); syncControls(); renderThemes();
+  setTab(LS.get('moye.tab', 'themes'));
+  if (LS.get('moye.panel', false)) setPanel(true);
+  const last = LS.get('moye.last', 'sample');
+  const shared = await takeSharedFile();
+  let ok = false;
+  try { if (!shared && last && last !== 'sample') ok = await openStored(last); } catch {}
+  if (!ok) await openBook(SAMPLE);
+  if (shared) openFile(shared);
+  loadSavedFonts();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleLayout);
+})();
+})();
+</script>
+</body>
+</html>
