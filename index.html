@@ -297,6 +297,7 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const root = document.documentElement;
+const APP = (typeof window.MoyeApp === 'object' && window.MoyeApp) || null;   // set by the Android app shell
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const clone = o => JSON.parse(JSON.stringify(o));
 function h(tag, props, ...kids) {
@@ -526,6 +527,7 @@ function applyTheme() {
   const ui = parseColor(c.uiBg);
   st.colorScheme = ui && lum(ui) < 0.42 ? 'dark' : 'light';
   const tc = document.querySelector('meta[name="theme-color"]'); if (tc && ui) tc.setAttribute('content', toHex(ui));
+  if (APP && ui) { try { APP.setBarColor(toHex(ui), lum(ui) < 0.42); } catch {} }
   $('#custom-css').textContent = t.css; stCustom.textContent = t.css;
   ensureWebFont(t.font); ensureWebFont(t.hfont);
   scheduleLayout();
@@ -1409,6 +1411,7 @@ $('#io-download').addEventListener('click', () => {
   if (!v) { toast('目前沒有內容可以下載，先按「匯出目前主題」'); return; }
   let name = '墨頁主題';
   try { name = (JSON.parse(v).name || name).replace(/[\\/:*?"<>|]/g, '_'); } catch {}
+  if (APP) { try { APP.saveText(name + '.json', v); } catch { toast('存檔沒有成功，可以改用「複製」'); } return; }
   const u = URL.createObjectURL(new Blob([v], { type: 'application/json' }));
   const a = h('a', { href: u, download: name + '.json' });
   document.body.append(a); a.click(); a.remove();
@@ -1460,9 +1463,30 @@ async function takeSharedFile() {
     return new File([blob], name, { type: blob.type });
   } catch { return null; }
 }
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+if (!APP && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+// Inside the Android app: a book opened from a file manager or the share sheet is served by the app shell.
+async function takeAppFile() {
+  if (!APP) return null;
+  try {
+    const name = APP.pendingName();
+    if (!name) return null;
+    const res = await fetch('incoming/book?t=' + Date.now());
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    APP.clearPending();
+    return new File([blob], name, { type: 'application/epub+zip' });
+  } catch { return null; }
+}
+window.__moyeIncoming = async () => { const f = await takeAppFile(); if (f) openFile(f); };
+window.__moyeBack = () => {
+  if (!popEl.hidden) { closePop(); return true; }
+  if (!$('#drawer').hidden) { closeDrawer(); return true; }
+  if (!$('#panel').hidden) { setPanel(false); return true; }
+  if (app.classList.contains('immersive')) { toggleImmersive(); return true; }
+  return false;
+};
 try {
   if ('launchQueue' in window) launchQueue.setConsumer(async p => {
     if (p && p.files && p.files.length) openFile(await p.files[0].getFile());
@@ -1477,7 +1501,7 @@ try {
   setTab(LS.get('moye.tab', 'themes'));
   if (LS.get('moye.panel', false)) setPanel(true);
   const last = LS.get('moye.last', 'sample');
-  const shared = await takeSharedFile();
+  const shared = (await takeSharedFile()) || (await takeAppFile());
   let ok = false;
   try { if (!shared && last && last !== 'sample') ok = await openStored(last); } catch {}
   if (!ok) await openBook(SAMPLE);

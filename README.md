@@ -31,6 +31,17 @@
 - **iPhone / iPad（Safari）**：分享按鈕 →「加入主畫面」
 - **電腦（Chrome / Edge）**：網址列右邊的安裝圖示
 
+## Android APK
+
+`android/` 是 Android App 的外殼：一個 WebView，打包時把上面的閱讀器檔案放進 APK，所以不需要網路也能用（網路字型除外）。
+
+- 可以從檔案管理員對 EPUB 選「開啟方式 → 墨頁」，或用「分享」送進來
+- 系統列顏色會跟著主題走，返回鍵會先關掉目錄／主題面板
+
+自己編譯：裝好 JDK 17 以上和 Android SDK，在 `android/` 裡執行 `./gradlew assembleRelease`，APK 會在 `android/app/build/outputs/apk/release/`。
+
+簽章金鑰不在 repo 裡。把金鑰檔放到 `android/moye.jks` 再編，新版才能覆蓋安裝舊版；沒有金鑰檔時會改用除錯金鑰，裝之前要先移除舊版。
+
 ## 檔案
 
 | 檔案 | 用途 |
@@ -40,5 +51,6 @@
 | `sw.js` | 離線快取，以及接收「分享」進來的書 |
 | `icons/` | App 圖示 |
 | `vendor/jszip.min.js` | 解開 EPUB 用的 JSZip 3.10.1（授權見 `vendor/JSZip-LICENSE.md`） |
+| `android/` | Android App 外殼，打包時把上面的檔案放進 APK |
 
 改了網站檔案之後，請把 `sw.js` 最上面的 `VERSION` 加一，已安裝的 App 才會換掉舊快取。

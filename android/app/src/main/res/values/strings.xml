@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">墨頁</string>
+    <string name="pick_file">選擇檔案</string>
+    <string name="saved">已儲存</string>
+    <string name="save_failed">存檔沒有成功</string>
+</resources>
