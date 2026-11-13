@@ -273,6 +273,7 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
             <option value="off">完全不用書本樣式</option>
           </select>
         </div>
+        <label class="check"><input type="checkbox" id="set-swipe"><span>捲動模式下，手指左右滑動換上一章／下一章</span></label>
         <label class="check"><input type="checkbox" id="set-quotes"><span>引號裡的文字套用「引號」的顏色和底色（「」『』“” ""）</span></label>
         <p class="hint">分頁模式：點畫面左右兩側或按方向鍵翻頁，點中間收起／叫回工具列。</p>
       </section>
@@ -388,6 +389,7 @@ const PRESETS = [
   { name: '豆沙綠', colors: { bg: '#b4dbb9', paper: '#c7edcc', text: '#2a382d', italic: '#5c7160', quote: '#1b6a50', underline: '#3c5f8a', heading: '#1b291e', link: '#1f6d59', uiBg: '#bde3c2', uiText: '#2a382d', uiBorder: '#9bc7a2', shadow: 'rgba(42, 56, 45, 0.3)', quoteBg: 'rgba(0, 0, 0, 0)' } },
   { name: '櫻餅', colors: { bg: '#efdfe3', paper: '#fbf2f4', text: '#49353f', italic: '#987a87', quote: '#ad436a', underline: '#4d7a6b', heading: '#38262f', link: '#ad436a', uiBg: '#f5e7eb', uiText: '#49353f', uiBorder: '#e0c8d0', shadow: 'rgba(73, 53, 63, 0.3)', quoteBg: 'rgba(173, 67, 106, 0.13)' } },
   { name: '莓果奶油', colors: { bg: '#f8f0e0', paper: '#fcfcf8', text: '#383436', italic: '#4c4746', quote: '#c66c90', underline: '#765928', heading: '#765928', link: '#c66c90', uiBg: '#fcf8f0', uiText: '#383436', uiBorder: '#ebdab8', shadow: 'rgba(56, 52, 54, 0.25)', quoteBg: '#fcf0f0' } },
+  { name: '奶油玫瑰', colors: { bg: '#faf3e3', paper: '#fdf7e9', text: '#3e3e3e', italic: '#ff995e', quote: '#e17ea4', underline: '#8dacc6', heading: '#3e3e3e', link: '#c2787c', uiBg: '#fffbf3', uiText: '#3e3e3e', uiBorder: '#e6a5a9', shadow: 'rgba(0, 0, 0, 0.43)', quoteBg: 'rgba(0, 0, 0, 0)' } },
   { name: '純黑', colors: { bg: '#000000', paper: '#000000', text: '#b4b4b4', italic: '#787878', quote: '#6fb0d8', underline: '#9fc49a', heading: '#d4d4d4', link: '#6fa8dc', uiBg: '#0c0c0c', uiText: '#b4b4b4', uiBorder: '#262626', shadow: 'rgba(0, 0, 0, 1)', quoteBg: 'rgba(0, 0, 0, 0)' } },
 ];
 const FONTS = [
@@ -427,7 +429,7 @@ function normTheme(t) {
 }
 let S = LS.get('moye.state', null);
 if (!S || typeof S !== 'object') S = {};
-S.settings = { mode: 'scroll', bookCss: 'theme', quotes: true, ...(S.settings || {}) };
+S.settings = { mode: 'scroll', bookCss: 'theme', quotes: true, swipe: true, ...(S.settings || {}) };
 S.user = Array.isArray(S.user) ? S.user.map(normTheme).filter(t => t.name) : [];
 if (S.cur) { S.cur = normTheme(S.cur); S.auto = !!S.auto; }
 else { S.cur = normTheme({ colors: autoPreset().colors }); S.active = autoPreset().name; S.auto = true; }
@@ -641,6 +643,7 @@ function buildControls() {
   $$('#mode-seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
   $('#set-bookcss').addEventListener('change', e => { S.settings.bookCss = e.target.value; saveState(); rerender(); });
   $('#set-quotes').addEventListener('change', e => { S.settings.quotes = e.target.checked; saveState(); rerender(); });
+  $('#set-swipe').addEventListener('change', e => { S.settings.swipe = e.target.checked; saveState(); });
 }
 function fillFontSelects() {
   const opts = FONTS.map(f => [f.id, f.label]).concat([...uploaded.keys()].map(n => ['up:' + n, `${n}（上傳的字型）`]));
@@ -661,7 +664,7 @@ function syncControls() {
   $('#f-custom').value = t.fontCustom; $('#f-custom-row').hidden = t.font !== 'custom';
   $('#f-align').value = t.align;
   $('#css-text').value = t.css;
-  $('#set-bookcss').value = S.settings.bookCss; $('#set-quotes').checked = !!S.settings.quotes;
+  $('#set-bookcss').value = S.settings.bookCss; $('#set-quotes').checked = !!S.settings.quotes; $('#set-swipe').checked = !!S.settings.swipe;
   $$('#mode-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.settings.mode)));
   const u = S.user.find(x => x.name === S.active);
   $('#theme-name').value = u ? u.name : '';
@@ -687,14 +690,42 @@ function exportTheme() {
   $('#io-hint').textContent = '這段 JSON 就是目前的主題。可以複製，或下載成 .json 檔，之後用「匯入主題」帶回來。';
   $('#io-text').value = JSON.stringify(out, null, 2);
 }
+// A SillyTavern theme keeps part of its look in custom CSS. Most of it targets the chat UI,
+// but the page background, line height, alignment and serif / sans choice carry over to reading.
+function stCssHints(css) {
+  const out = {};
+  if (typeof css !== 'string' || !css.trim() || css.length > 300000) return out;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    for (const r of sheet.cssRules) {              // top-level rules only: @media blocks are device tweaks
+      if (!(r instanceof CSSStyleRule)) continue;
+      const sels = r.selectorText.split(',').map(x => x.trim());
+      const st = r.style;
+      if (sels.includes('body')) {
+        const bg = parseColor(st.backgroundColor);
+        if (bg && bg[3] > 0) out.bg = [bg[0], bg[1], bg[2], 1];
+        if (/^[\d.]+$/.test(st.lineHeight)) out.lh = +st.lineHeight;
+        const ff = (st.fontFamily || '').toLowerCase();
+        if (/sans-serif/.test(ff)) out.font = 'sans'; else if (/monospace/.test(ff)) out.font = 'mono'; else if (/serif/.test(ff)) out.font = 'serif';
+      }
+      if (sels.some(x => /(^|\s)\.mes_text$/.test(x))) {
+        if (st.textAlign === 'justify') out.align = 'justify';
+        if (/^[\d.]+$/.test(st.lineHeight)) out.lh = +st.lineHeight;
+      }
+    }
+  } catch {}
+  return out;
+}
 function fromSillyTavern(j) {
+  const hint = stCssHints(j.custom_css);
   const get = k => parseColor(j[k]);
   const text = get('main_text_color') || [220, 220, 210, 1];
   const dark = lum(text) > 0.5;
-  const base = dark ? [18, 18, 20, 1] : [240, 240, 238, 1];
+  const base = hint.bg || (dark ? [18, 18, 20, 1] : [240, 240, 238, 1]);
   const ui = over(get('blur_tint_color') || base, base);
-  const paper = over(get('chat_tint_color') || ui, ui);
-  const bg = over([0, 0, 0, dark ? 0.25 : 0.06], paper);
+  const paper = over(get('chat_tint_color') || ui, hint.bg ? base : ui);   // the chat tint sits on the page background
+  const bg = hint.bg ? base : over([0, 0, 0, dark ? 0.25 : 0.06], paper);
   const quote = get('quote_text_color') || text;
   const colors = {
     bg: toCss(bg), paper: toCss(paper), text: toCss(over(text, paper)), italic: toCss(over(get('italics_text_color') || text, paper)),
@@ -708,6 +739,9 @@ function fromSillyTavern(j) {
   t.name = String(j.name || '酒館主題').slice(0, 40);
   if (typeof j.shadow_width === 'number') t.shadowWidth = clamp(j.shadow_width, 0, 10);
   if (typeof j.font_scale === 'number') t.size = Math.round(clamp(18 * j.font_scale, 12, 36));
+  if (hint.lh) t.lh = hint.lh;
+  if (hint.align) t.align = hint.align;
+  if (hint.font) t.font = hint.font;
   return t;
 }
 function importTheme(textValue) {
@@ -715,7 +749,7 @@ function importTheme(textValue) {
   try { j = JSON.parse(textValue); } catch { toast('這段內容不是有效的 JSON，請確認有整段複製到'); return; }
   if (!j || typeof j !== 'object') { toast('這段 JSON 裡沒有看到主題設定'); return; }
   let t, note = '';
-  if ('main_text_color' in j) { t = fromSillyTavern(j); note = '（酒館主題：已帶入顏色、陰影和字級；酒館的自訂 CSS 是針對酒館介面寫的，所以沒有帶入）'; }
+  if ('main_text_color' in j) { t = fromSillyTavern(j); note = '（酒館主題：已帶入顏色、陰影、字級，以及自訂 CSS 裡的背景色、行高、對齊；其餘自訂 CSS 是寫給酒館介面的，沒有帶入）'; }
   else if (j.colors && typeof j.colors === 'object') t = j;
   else { toast('看不出這是哪種主題檔。目前支援本閱讀器匯出的主題，以及酒館的主題 JSON'); return; }
   t = normTheme(t);
@@ -901,6 +935,7 @@ const SAMPLE = {
 <ul>
 <li>「目錄」可以跳章節，底下的橫條可以拖到全書的任何位置。</li>
 <li>分頁模式下，點畫面左右兩側翻頁，點中間可以收起工具列。</li>
+<li>捲動模式下，手指往左滑是下一章，往右滑是上一章；分頁模式下左右滑是翻頁。</li>
 <li>鍵盤的左右方向鍵：分頁模式是翻頁，捲動模式是換章。</li>
 </ul>
 <p>「就這樣？」</p>
@@ -1358,12 +1393,28 @@ vp.addEventListener('keydown', e => {
 let scrollRaf = 0;
 vp.addEventListener('scroll', () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; updateProgress(); savePos(); }); }, { passive: true });
 let tx0 = null;
-vp.addEventListener('touchstart', e => { tx0 = e.touches.length === 1 ? [e.touches[0].clientX, e.touches[0].clientY] : null; }, { passive: true });
+// A sideways swipe that starts inside something that scrolls sideways (a wide table, a code block) belongs to that element.
+const scrollsSideways = path => path.some(n => n.nodeType === 1 && n !== vp && n.scrollWidth > n.clientWidth + 8 && /auto|scroll/.test(getComputedStyle(n).overflowX));
+vp.addEventListener('touchstart', e => {
+  tx0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), own: !paged() && scrollsSideways(e.composedPath()) } : null;
+}, { passive: true });
+vp.addEventListener('touchcancel', () => { tx0 = null; }, { passive: true });
 vp.addEventListener('touchend', e => {
-  if (!tx0 || !paged() || !popEl.hidden) return;
-  const t = e.changedTouches[0], dx = t.clientX - tx0[0], dy = t.clientY - tx0[1];
-  tx0 = null;
-  if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) nextPage(); else prevPage(); }
+  const s0 = tx0; tx0 = null;
+  if (!s0 || !popEl.hidden || !R.book) return;
+  const t = e.changedTouches[0], dx = t.clientX - s0.x, dy = t.clientY - s0.y;
+  if (paged()) {
+    if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) nextPage(); else prevPage(); }
+    return;
+  }
+  // Scroll mode: a quick, clearly horizontal swipe changes chapter.
+  if (!S.settings.swipe || s0.own || Date.now() - s0.t > 700) return;
+  const sel = window.getSelection && getSelection();
+  if (sel && !sel.isCollapsed) return;
+  if (Math.abs(dx) < 72 || Math.abs(dx) < Math.abs(dy) * 2.2) return;
+  if (dx < 0) nextChapter();
+  else if (R.idx > 0) prevChapter();
+  else toast('已經是第一章了');
 }, { passive: true });
 let wheelAt = 0;
 vp.addEventListener('wheel', e => {
