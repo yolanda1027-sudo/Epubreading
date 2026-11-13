@@ -268,7 +268,7 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
         <div data-sliders="layout"></div>
         <div class="frow"><label for="set-bookcss">書本樣式</label>
           <select id="set-bookcss">
-            <option value="theme">主題優先（建議）</option>
+            <option value="theme">主題優先，保留書裡有底色的區塊（建議）</option>
             <option value="keep">保留書本原本的樣子</option>
             <option value="off">完全不用書本樣式</option>
           </select>
@@ -494,23 +494,28 @@ ul,ol{padding-left:1.6em}
 .bk-pop-close{position:absolute;top:10px;right:12px;font:inherit;font-family:system-ui,sans-serif;font-size:14px;letter-spacing:0;color:var(--ui-fg);
   background:color-mix(in srgb,var(--ui-fg) 8%,transparent);border:1px solid var(--ui-border);border-radius:8px;padding:.25em .8em;cursor:pointer}
 `;
+// "Theme first": the theme's colours, font and spacing win over the book's own styling.
+// The exception is a block the book gives its own background (a status panel, a letter, a card):
+// it is marked .bk-keep and keeps its own palette, because its text colours were chosen for that background.
+const NOT_KEPT = ':where(:not(.bk-keep,.bk-keep *))';
 const FORCE_CSS = `
-.bk-body,.bk-body :where(*){color:inherit!important;background-color:transparent!important;line-height:inherit!important}
+.bk-body{color:inherit!important;background-color:transparent!important;line-height:inherit!important}
+.bk-body :where(*)${NOT_KEPT}{color:inherit!important;background-color:transparent!important;line-height:inherit!important}
 .bk-html{color:var(--r-text)!important;font-size:var(--r-size)!important;line-height:var(--r-lh)!important;letter-spacing:var(--r-ls)!important}
 .bk-main{background:transparent!important}
-.bk-pop-card > .bk-body > :is(aside,div,section){background-color:transparent!important}
+.bk-pop-card > .bk-body > :is(aside,div,section)${NOT_KEPT}{background-color:transparent!important}
 .bk-body{font-size:inherit!important;margin:0!important;padding:0!important}
 .bk-body,.bk-body :where(:not(pre,code,kbd,samp,tt)){font-family:var(--r-font)!important}
-.bk-body :is(h1,h2,h3,h4,h5,h6){font-family:var(--r-hfont)!important;color:var(--r-heading)!important;line-height:1.35!important}
-.bk-body :where(p){margin-top:0!important;margin-bottom:var(--r-para)!important;text-indent:var(--r-indent)!important}
-.bk-body :is(em,i,cite,dfn){color:var(--r-italic)!important}
-.bk-body :is(u,ins){color:var(--r-underline)!important}
-.bk-body :is(q,.bk-q){color:var(--r-quote)!important}
-.bk-body :is(q,.bk-q,.bk-q-in){background-color:var(--r-quote-bg)!important}
-.bk-body a{color:var(--r-link)!important}
-.bk-body :is(.reasoning,.swipe,aside,details,pre){background-color:color-mix(in srgb,var(--r-text) 7%,transparent)!important;
+.bk-body :is(h1,h2,h3,h4,h5,h6)${NOT_KEPT}{font-family:var(--r-hfont)!important;color:var(--r-heading)!important;line-height:1.35!important}
+.bk-body :where(p)${NOT_KEPT}{margin-top:0!important;margin-bottom:var(--r-para)!important;text-indent:var(--r-indent)!important}
+.bk-body :is(em,i,cite,dfn)${NOT_KEPT}{color:var(--r-italic)!important}
+.bk-body :is(u,ins)${NOT_KEPT}{color:var(--r-underline)!important}
+.bk-body :is(q,.bk-q)${NOT_KEPT}{color:var(--r-quote)!important}
+.bk-body :is(q,.bk-q,.bk-q-in)${NOT_KEPT}{background-color:var(--r-quote-bg)!important}
+.bk-body a${NOT_KEPT}{color:var(--r-link)!important}
+.bk-body :is(.reasoning,.swipe,aside,details,pre)${NOT_KEPT}{background-color:color-mix(in srgb,var(--r-text) 7%,transparent)!important;
   border-color:color-mix(in srgb,var(--r-text) 28%,transparent)!important}
-.bk-body :is(.reasoning,.swipe > p:first-child){color:color-mix(in srgb,var(--r-text) 72%,transparent)!important}
+.bk-body :is(.reasoning,.swipe > p:first-child)${NOT_KEPT}{color:color-mix(in srgb,var(--r-text) 72%,transparent)!important}
 `;
 const stBase = h('style', { text: READER_CSS });
 const stBook = h('style');
@@ -543,6 +548,7 @@ function applyTheme() {
   if (APP && ui) { try { APP.setBarColor(toHex(ui), lum(ui) < 0.42); } catch {} }
   $('#custom-css').textContent = t.css; stCustom.textContent = t.css;
   ensureWebFont(t.font); ensureWebFont(t.hfont);
+  if (R.book) requestAnimationFrame(fixKeptContrast);
   scheduleLayout();
 }
 function themeSource() {
@@ -1046,6 +1052,48 @@ async function buildChapter(book, i) {
   return { nodes: [...imp.childNodes], cls: body.getAttribute('class') || '', css, fonts };
 }
 
+/* blocks that bring their own background keep their own colours */
+function parseRgb(str) {
+  const m = /rgba?\(([^)]+)\)/.exec(str || '');
+  if (!m) return null;
+  const v = m[1].split(/[\s,\/]+/).filter(Boolean).map(parseFloat);
+  return v.length >= 3 && v.every(n => !isNaN(n)) ? [v[0], v[1], v[2], v.length > 3 ? v[3] : 1] : null;
+}
+const relLum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+const contrast = (a, b) => { const x = relLum(a), y = relLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const KEEP_SKIP = new Set(['pre', 'code', 'kbd', 'samp', 'img', 'br', 'hr', 'svg', 'video', 'canvas']);
+// Run while only the book's own CSS is in effect, so what we read is what the book asked for.
+function markKept(rootEl) {
+  const total = rootEl.textContent.length;
+  for (const elm of rootEl.querySelectorAll('*')) {
+    if (KEEP_SKIP.has(elm.localName) || elm.classList.contains('reasoning') || elm.classList.contains('swipe')) continue;
+    if (elm.parentElement && elm.parentElement.closest('.bk-keep')) continue;
+    const cs = getComputedStyle(elm);
+    const bg = parseRgb(cs.backgroundColor);
+    if (!((bg && bg[3] > 0.02) || (cs.backgroundImage && cs.backgroundImage !== 'none'))) continue;
+    if (total > 600 && elm.textContent.length > total * 0.7) continue;    // wraps the whole chapter: that is a page, not a card
+    elm.classList.add('bk-keep');
+  }
+}
+// A kept block that never set its own text colour inherits the theme's. Make sure that still reads on its background.
+function fixKeptContrast() {
+  for (const elm of bodyEl.querySelectorAll('.bk-keep')) {
+    if (elm.dataset.bkAuto != null) {
+      if (elm.dataset.bkAuto) elm.style.setProperty('color', elm.dataset.bkAuto); else elm.style.removeProperty('color');
+      delete elm.dataset.bkAuto;
+    }
+    const cs = getComputedStyle(elm);
+    let bg = parseRgb(cs.backgroundColor);
+    if (!bg || bg[3] < 0.5) bg = parseRgb(cs.backgroundImage);
+    const fg = parseRgb(cs.color);
+    if (!bg || !fg || bg[3] < 0.5) continue;
+    if (contrast(fg, bg) < 2.6) {
+      elm.dataset.bkAuto = elm.style.getPropertyValue('color');
+      elm.style.setProperty('color', relLum(bg) > 0.4 ? '#2b2b2b' : '#ededed');
+    }
+  }
+}
+
 /* quote colouring, the way a chat front-end tints dialogue */
 const OPENERS = { '「': '」', '『': '』', '“': '”', '«': '»' };
 const BLOCK_RE = /^(p|div|li|td|th|h[1-6]|blockquote|dd|dt|section|article|aside|br|hr|tr|table|ul|ol|details|summary|figure|figcaption)$/;
@@ -1143,9 +1191,13 @@ async function show(i, where) {
   bodyEl.className = 'bk-body ' + ch.cls;
   bodyEl.replaceChildren(...ch.nodes);
   stBook.textContent = ch.css;
+  stForce.textContent = '';
+  const themeFirst = S.settings.bookCss === 'theme';
+  if (themeFirst) markKept(bodyEl);
   stForce.textContent = S.settings.bookCss === 'keep' ? '' : FORCE_CSS;
   $('#book-fonts').textContent = ch.fonts;
   if (S.settings.quotes) colorQuotes(bodyEl);
+  if (themeFirst) fixKeptContrast();
   R.idx = i;
   vp.scrollTop = 0; R.page = 0;
   measure();
