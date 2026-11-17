@@ -4,4 +4,7 @@
     <string name="pick_file">選擇檔案</string>
     <string name="saved">已儲存</string>
     <string name="save_failed">存檔沒有成功</string>
+    <string name="card_saved">小卡已存到相簿（Pictures/墨頁）</string>
+    <string name="share_card">分享小卡</string>
+    <string name="share_failed">分享沒有成功</string>
 </resources>

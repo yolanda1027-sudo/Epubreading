@@ -110,6 +110,36 @@ button,input,select,textarea{font:inherit;color:inherit}
 .shelf-meta b{display:block;overflow-wrap:anywhere;line-height:1.3}
 .shelf-meta span{font-size:.78rem;opacity:.7}
 .hint{font-size:.8rem;opacity:.72;line-height:1.55;margin:.6em 0}
+#btn-mark{padding:.4em .55em;display:inline-grid;place-items:center}
+.marks{display:flex;flex-direction:column;gap:10px}
+.mark-item{border:1px solid var(--ui-border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.mark-go{background:none;border:0;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.mark-chap{font-size:.75rem;opacity:.7}
+.mark-snip{line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.mark-snip.sel{color:var(--r-quote)}
+.mark-note{margin:0;padding:.45em .7em;border-radius:8px;background:color-mix(in srgb,var(--accent) 10%,transparent);font-size:.9rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.mark-ta{min-height:84px;font-family:inherit;font-size:.92rem}
+.mark-tools{display:flex;align-items:center;gap:4px}
+.mark-when{flex:1;font-size:.75rem;opacity:.6;font-variant-numeric:tabular-nums}
+.mark-tools .btn{padding:.25em .6em;font-size:.82rem}
+#sel-bar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:30;
+  display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;border-radius:14px;background:var(--ui-bg);border:1px solid var(--ui-border);
+  box-shadow:0 8px 28px rgba(0,0,0,.18);max-width:calc(100% - 32px);white-space:nowrap}
+#sel-count{font-size:.8rem;opacity:.7;font-variant-numeric:tabular-nums}
+#card-dlg{position:absolute;inset:0;z-index:55;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.dlg-card{background:var(--ui-bg);border:1px solid var(--ui-border);border-radius:16px;width:min(860px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden}
+.dlg-card .panel-head{padding:12px 16px 4px}
+.card-body{display:flex;gap:18px;padding:12px 16px 18px;overflow:auto;min-height:0}
+.card-preview{flex:1 1 55%;min-width:0;display:flex;align-items:center;justify-content:center}
+#card-canvas{max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.card-opts{flex:1 1 45%;min-width:0;display:flex;flex-direction:column;gap:4px}
+.card-actions{margin-top:14px}
+.card-actions .btn{flex:1}
+@media (max-width:640px){
+  .card-body{flex-direction:column;gap:10px}
+  #card-canvas{max-height:44vh}
+}
 .tag{display:inline-block;font-size:.7rem;border:1px solid currentColor;border-radius:4px;padding:0 .35em;margin-left:.4em;opacity:.75;vertical-align:1px}
 
 /* theme workshop */
@@ -193,18 +223,25 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
     <button class="btn" id="btn-prev" aria-label="上一章">‹<span class="nav-label"> 上一章</span></button>
     <input type="range" id="progress" min="0" max="1000" value="0" aria-label="全書進度">
     <span id="progress-text">0%</span>
+    <button class="btn" id="btn-mark" aria-label="在這裡加書籤" title="在這裡加書籤"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 1.5h8a.5.5 0 0 1 .5.5v12.2a.4.4 0 0 1-.65.3L8 11.6l-3.85 2.9a.4.4 0 0 1-.65-.3V2a.5.5 0 0 1 .5-.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
     <button class="btn" id="btn-next" aria-label="下一章"><span class="nav-label">下一章 </span>›</button>
   </footer>
 
   <div id="scrim" hidden></div>
-  <aside id="drawer" hidden role="dialog" aria-label="目錄與書架">
+  <aside id="drawer" hidden role="dialog" aria-label="目錄、書籤與書架">
     <div class="tabs" role="tablist">
       <button role="tab" data-dtab="toc" aria-selected="true">目錄</button>
+      <button role="tab" data-dtab="marks" aria-selected="false">書籤</button>
       <button role="tab" data-dtab="shelf" aria-selected="false">書架</button>
       <span class="spacer"></span>
       <button id="drawer-close" aria-label="關閉">關閉</button>
     </div>
     <div class="drawer-body" data-dpane="toc"><ul class="toc" id="toc-list"></ul></div>
+    <div class="drawer-body" data-dpane="marks" hidden>
+      <button class="btn primary" id="btn-addmark" style="width:100%">在目前位置加書籤</button>
+      <p class="hint" id="mark-count"></p>
+      <div class="marks" id="mark-list"></div>
+    </div>
     <div class="drawer-body" data-dpane="shelf" hidden>
       <button class="btn primary" id="btn-open" style="width:100%">開啟 EPUB／TXT 檔案</button>
       <p class="hint">也可以直接把 .epub 或 .txt 檔拖進視窗。TXT 會自動找「第○章」分章；酒館匯出的聊天紀錄會一則一章。開過的書會留在這個瀏覽器裡，方便下次接著看；清除網站資料後就會消失，原檔請自己留著。</p>
@@ -287,6 +324,27 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
     </div>
   </aside>
 
+  <div id="sel-bar" hidden>
+    <span id="sel-count"></span>
+    <button class="btn" id="sel-mark" type="button">加書籤</button>
+    <button class="btn primary" id="sel-card" type="button">做成小卡</button>
+  </div>
+  <div id="card-dlg" hidden role="dialog" aria-modal="true" aria-label="做成小卡">
+    <div class="dlg-card">
+      <div class="panel-head"><h2>做成小卡</h2><button class="btn ghost" id="card-close" type="button">關閉</button></div>
+      <div class="card-body">
+        <div class="card-preview"><canvas id="card-canvas" width="1080" height="1350" aria-label="小卡預覽"></canvas></div>
+        <div class="card-opts">
+          <div class="frow"><label for="card-theme">配色</label><select id="card-theme"></select></div>
+          <div class="frow"><span>比例</span>
+            <div class="seg" id="card-ratio"><button type="button" data-r="1">方形</button><button type="button" data-r="1.25">直式</button><button type="button" data-r="1.7778">限動</button></div>
+          </div>
+          <label class="check"><input type="checkbox" id="card-meta"><span>附上書名和章節</span></label>
+          <div class="row card-actions"><button class="btn primary" id="card-save" type="button">存到手機</button><button class="btn" id="card-share" type="button">分享</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <div id="drop-hint" hidden>放開就打開這本書</div>
   <input type="file" id="file-epub" accept=".epub,application/epub+zip,.txt,text/plain" hidden>
@@ -482,6 +540,8 @@ td,th{border:1px solid color-mix(in srgb,var(--r-text) 25%,transparent);padding:
 ul,ol{padding-left:1.6em}
 ::selection{background:color-mix(in srgb,var(--r-quote) 32%,transparent)}
 .bk-fn{display:none}
+.bk-flash{outline:3px solid color-mix(in srgb,var(--r-quote) 55%,transparent);outline-offset:6px;border-radius:6px}
+@media (prefers-reduced-motion:no-preference){.bk-flash{transition:outline-color .4s}}
 details.reasoning,details.swipe{margin:.9em 0;padding:.35em .9em;border-radius:10px}
 details.reasoning > summary,details.swipe > summary{cursor:pointer;font-size:.9em;padding:.2em 0}
 details.reasoning details.reasoning{margin:.4em 0}
@@ -1114,6 +1174,7 @@ const SAMPLE = {
 <li>「目錄」可以跳章節，底下的橫條可以拖到全書的任何位置。</li>
 <li>分頁模式下，點畫面左右兩側翻頁，點中間可以收起工具列。</li>
 <li>捲動模式下，手指往左滑是下一章，往右滑是上一章；分頁模式下左右滑是翻頁。</li>
+<li>下方的書籤按鈕可以記住目前位置，還能寫備註；長按選取一段文字，可以加書籤或做成圖片小卡。</li>
 <li>鍵盤的左右方向鍵：分頁模式是翻頁，捲動模式是換章。</li>
 </ul>
 <p>「就這樣？」</p>
@@ -1371,7 +1432,9 @@ async function show(i, where) {
   R.idx = i;
   vp.scrollTop = 0; R.page = 0;
   measure();
-  if (where && where.frag && findAnchor(where.frag)) jumpTo(findAnchor(where.frag));
+  const anchorEl = where && where.anchor ? findBlock(where.anchor) : null;
+  if (anchorEl) { jumpTo(anchorEl); flash(anchorEl); }
+  else if (where && where.frag && findAnchor(where.frag)) jumpTo(findAnchor(where.frag));
   else if (where && where.frac != null) setFrac(where.frac);
   else if (paged()) applyPage(false);
   updateChrome(); savePos();
@@ -1550,6 +1613,7 @@ async function renderShelf() {
         clearTimeout(armed);
         await idb('books', 'readwrite', s => s.delete(b.id));
         await idb('data', 'readwrite', s => s.delete(b.id));
+        saveMarks(b.id, []);
         if (R.book && R.book.id === b.id) await openBook(SAMPLE);
         renderShelf(); toast(`已把《${b.title}》從書架移除`);
       });
@@ -1561,12 +1625,300 @@ async function renderShelf() {
   add({ id: 'sample', title: SAMPLE.title, author: SAMPLE.author }, true);
 }
 
+/* ---------- bookmarks ---------- */
+// A bookmark points at a paragraph (its index among the chapter's blocks plus a bit of its text),
+// so it lands in the same place even after the font size or theme changes.
+const BLOCK_SEL_FULL = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,dt,dd,figcaption,td,th,summary,div:not(:has(p,div,li,h1,h2,h3,h4,h5,h6,blockquote,table,pre))';
+const BLOCK_SEL_BASIC = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,dt,dd,figcaption,td,th,summary';
+function blockList() {
+  let list;
+  try { list = bodyEl.querySelectorAll(BLOCK_SEL_FULL); } catch { list = bodyEl.querySelectorAll(BLOCK_SEL_BASIC); }
+  return [...list].filter(e => !e.closest('.bk-fn'));
+}
+const squash = s => (s || '').replace(/\s+/g, ' ').trim();
+const visibleArea = () => (paged() ? host : vp).getBoundingClientRect();
+function currentAnchor() {
+  const area = visibleArea(), blocks = blockList();
+  for (let k = 0; k < blocks.length; k++) {
+    const el = blocks[k];
+    if (!squash(el.textContent)) continue;
+    for (const r of el.getClientRects()) {
+      if (r.bottom > area.top + 4 && r.top < area.bottom && r.right > area.left && r.left < area.right) {
+        return { pi: k, snip: squash(el.textContent).slice(0, 80) };
+      }
+    }
+  }
+  return { pi: -1, snip: '' };
+}
+function anchorOfNode(node) {
+  const blocks = blockList(), set = new Set(blocks);
+  for (let n = node && (node.nodeType === 1 ? node : node.parentElement); n && n !== bodyEl; n = n.parentElement) {
+    if (set.has(n)) return blocks.indexOf(n);
+  }
+  return -1;
+}
+function findBlock(m) {
+  const blocks = blockList();
+  const key = squash(m.snip).replace(/\s/g, '').slice(0, 24);
+  const has = el => !key || squash(el.textContent).replace(/\s/g, '').includes(key);
+  if (m.pi >= 0 && blocks[m.pi] && has(blocks[m.pi])) return blocks[m.pi];
+  return key ? blocks.find(has) || null : (blocks[m.pi] || null);
+}
+function flash(el) {
+  if (!el) return;
+  el.classList.add('bk-flash');
+  setTimeout(() => el.classList.remove('bk-flash'), 1800);
+}
+const allMarks = () => { const v = LS.get('moye.bm', {}); return v && typeof v === 'object' ? v : {}; };
+const marksFor = id => (allMarks()[id] || []).filter(m => m && typeof m.i === 'number');
+function saveMarks(id, list) { const all = allMarks(); if (list.length) all[id] = list; else delete all[id]; LS.set('moye.bm', all); }
+const chapLabel = () => $('#chap-title').textContent.trim();
+function addMark(fromSel) {
+  if (!R.book) return;
+  let a;
+  if (fromSel && lastSel) a = { pi: lastSel.pi, snip: lastSel.text.replace(/\s+/g, ' ').slice(0, 80), sel: true };
+  else a = currentAnchor();
+  const m = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), i: R.idx, f: +currentFrac().toFixed(4),
+    pi: a.pi, snip: a.snip, sel: !!a.sel, note: '', chap: chapLabel(), t: Date.now() };
+  const list = marksFor(R.book.id); list.push(m); saveMarks(R.book.id, list);
+  clearSel();
+  openDrawer('marks', m.id);
+  toast('已加上書籤，可以順手寫個備註');
+}
+function gotoMark(m) {
+  closeDrawer();
+  if (m.i === R.idx) {
+    const el = findBlock(m);
+    if (el) { jumpTo(el); flash(el); } else setFrac(m.f || 0);
+    savePos();
+  } else show(m.i, { anchor: m, frac: m.f });
+}
+function renderMarks(editId) {
+  const list = $('#mark-list'); list.replaceChildren();
+  if (!R.book) return;
+  const arr = marksFor(R.book.id).sort((a, b) => a.i - b.i || a.pi - b.pi || a.t - b.t);
+  $('#mark-count').textContent = arr.length ? `共 ${arr.length} 個` : '';
+  if (!arr.length) {
+    list.append(h('p', { class: 'hint', text: '這本書還沒有書籤。按上面的按鈕記下目前的位置，或是選取一段文字後按「加書籤」。每個書籤都可以寫備註。' }));
+    return;
+  }
+  const save = arr2 => saveMarks(R.book.id, arr2);
+  for (const m of arr) {
+    const go = h('button', { class: 'mark-go', type: 'button' },
+      h('span', { class: 'mark-chap', text: m.chap || `第 ${m.i + 1} 節` }),
+      h('span', { class: 'mark-snip' + (m.sel ? ' sel' : ''), text: m.snip ? (m.sel ? `「${m.snip}」` : m.snip) : '（這個位置沒有文字）' }));
+    go.addEventListener('click', () => gotoMark(m));
+    const noteView = h('p', { class: 'mark-note', text: m.note || '' });
+    noteView.hidden = !m.note;
+    const ta = h('textarea', { class: 'mark-ta', id: 'mark-ta-' + m.id, maxlength: '1000', placeholder: '寫點備註，例如：這段好可愛', 'aria-label': '書籤備註' });
+    ta.value = m.note || '';
+    const ed = h('div', { class: 'mark-edit' }, ta, h('div', { class: 'row' },
+      h('button', { class: 'btn primary', type: 'button', text: '儲存備註', onclick: () => {
+        const all2 = marksFor(R.book.id), x = all2.find(y => y.id === m.id);
+        if (x) { x.note = ta.value.trim(); save(all2); }
+        renderMarks(); toast(ta.value.trim() ? '備註已儲存' : '備註已清空');
+      } }),
+      h('button', { class: 'btn', type: 'button', text: '取消', onclick: () => renderMarks() })));
+    ed.hidden = editId !== m.id;
+    const del = h('button', { class: 'btn ghost', type: 'button', text: '刪除' });
+    let armed = 0;
+    del.addEventListener('click', () => {
+      if (!armed) { armed = setTimeout(() => { armed = 0; del.textContent = '刪除'; }, 3000); del.textContent = '確定刪除？'; return; }
+      clearTimeout(armed);
+      save(marksFor(R.book.id).filter(y => y.id !== m.id)); renderMarks(); toast('書籤已刪除');
+    });
+    const when = new Date(m.t).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    const tools = h('div', { class: 'mark-tools' }, h('span', { class: 'mark-when', text: when }),
+      h('button', { class: 'btn ghost', type: 'button', text: m.note ? '改備註' : '寫備註', onclick: () => { ed.hidden = false; ta.focus(); } }), del);
+    list.append(h('div', { class: 'mark-item', id: 'mark-' + m.id }, go, noteView, ed, tools));
+    if (editId === m.id) requestAnimationFrame(() => { ed.scrollIntoView({ block: 'nearest' }); ta.focus({ preventScroll: true }); });
+  }
+}
+
+/* ---------- text selection ---------- */
+let lastSel = null, selHideTimer = 0;
+const bookSelection = () => (typeof shadow.getSelection === 'function' ? shadow.getSelection() : null) || window.getSelection();
+function clearSel() {
+  try { const s = bookSelection(); if (s) s.removeAllRanges(); } catch {}
+  lastSel = null; $('#sel-bar').hidden = true;
+}
+document.addEventListener('selectionchange', () => {
+  const s = bookSelection();
+  const ok = s && s.rangeCount && !s.isCollapsed && bodyEl.contains(s.anchorNode) && squash(s.toString());
+  if (ok) {
+    clearTimeout(selHideTimer);
+    const text = s.toString().replace(/\r/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+    lastSel = { text, pi: anchorOfNode(s.getRangeAt(0).startContainer) };
+    $('#sel-count').textContent = `已選 ${[...text.replace(/\s/g, '')].length} 字`;
+    $('#sel-bar').hidden = false;
+  } else if (!$('#sel-bar').hidden) {
+    clearTimeout(selHideTimer);
+    selHideTimer = setTimeout(() => { $('#sel-bar').hidden = true; }, 400);   // long enough for a tap on the bar to land
+  }
+});
+
+/* ---------- quote cards ---------- */
+const CARD = { text: '', ratio: 1.25, meta: true, theme: 'cur', title: '', chap: '', author: '' };
+const NO_START = new Set([...'，。、；：！？）」』》〉】〕”’…—,.;:!?)]}%·・～ー']);
+const NO_END = new Set([...'（「『《〈【〔“‘([{']);
+function cardThemeObj() {
+  if (CARD.theme === 'cur') return S.cur;
+  const [kind, idx] = CARD.theme.split(':');
+  const t = kind === 'p' ? PRESETS[+idx] : S.user[+idx];
+  return t ? normTheme({ ...S.cur, ...(kind === 'u' ? t : {}), colors: t.colors }) : S.cur;
+}
+function rgbaOf(col, alpha) { const c = parseColor(col) || [0, 0, 0, 1]; return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha == null ? c[3] : alpha * c[3]})`; }
+function wrapCard(g, text, maxW) {
+  const paras = [];
+  for (const para of text.split('\n')) {
+    const p = para.trim(); if (!p) continue;
+    const toks = p.match(/[A-Za-z0-9À-ɏ'’\-]+|\s+|./gsu) || [];
+    const lines = []; let line = '', w = 0;
+    for (let t of toks) {
+      if (/^\s+$/.test(t)) t = ' ';
+      const tw = g.measureText(t).width;
+      if (w + tw > maxW && line) {
+        if (t === ' ') continue;
+        if (NO_START.has(t[0]) && w + tw <= maxW * 1.06) { line += t; w += tw; continue; }
+        let carry = '';
+        if (NO_END.has(line[line.length - 1])) { carry = line.slice(-1); line = line.slice(0, -1); }
+        lines.push(line.replace(/\s+$/, '')); line = carry + t; w = g.measureText(line).width; continue;
+      }
+      line += t; w += tw;
+    }
+    if (line.trim()) lines.push(line);
+    paras.push(lines);
+  }
+  return paras;
+}
+function fitLine(g, s, maxW) {
+  if (g.measureText(s).width <= maxW) return s;
+  const cs = [...s];
+  while (cs.length && g.measureText(cs.join('') + '…').width > maxW) cs.pop();
+  return cs.join('') + '…';
+}
+function roundedRect(g, x, y, w, hh, r) {
+  g.beginPath();
+  if (g.roundRect) { g.roundRect(x, y, w, hh, r); return; }
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + hh, r); g.arcTo(x + w, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+let cardDrawSeq = 0;
+async function drawCard() {
+  const seq = ++cardDrawSeq;
+  const th = cardThemeObj(), c = th.colors;
+  const fam = fontStack(th.font, th.fontCustom), hfam = th.hfont === 'same' ? fam : fontStack(th.hfont, th.fontCustom);
+  ensureWebFont(th.font); ensureWebFont(th.hfont);
+  try {
+    await Promise.race([Promise.all([document.fonts.load(`48px ${fam}`, CARD.text.slice(0, 60) || '字'), document.fonts.load(`600 40px ${hfam}`, CARD.title || '字')]),
+      new Promise(r => setTimeout(r, 2500))]);
+  } catch {}
+  if (seq !== cardDrawSeq) return;
+  const W = 1080, H = Math.round(W * CARD.ratio);
+  const cv = $('#card-canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.textBaseline = 'alphabetic';
+  g.fillStyle = c.bg; g.fillRect(0, 0, W, H);
+  const m = 44;
+  roundedRect(g, m, m, W - 2 * m, H - 2 * m, 34); g.fillStyle = c.paper; g.fill();
+  g.lineWidth = 3; g.strokeStyle = c.uiBorder; g.stroke();
+
+  const padX = m + 88, boxW = W - 2 * padX;
+  const top = m + 150, footH = CARD.meta ? 210 : 110, bottom = H - m - footH;
+  let text = CARD.text, size = 64, layout, lh, gap, total;
+  for (;;) {
+    for (size = 66; size >= 28; size -= 2) {
+      g.font = `${size}px ${fam}`;
+      layout = wrapCard(g, text, boxW);
+      lh = size * 1.72; gap = size * 0.6;
+      total = layout.reduce((n, l) => n + l.length * lh, 0) + Math.max(0, layout.length - 1) * gap;
+      if (total <= bottom - top) break;
+    }
+    if (total <= bottom - top || [...text].length < 12) break;
+    const cs = [...text.replace(/…+$/, '')]; text = cs.slice(0, Math.floor(cs.length * 0.9)).join('') + '……';
+  }
+  // text, with quoted parts in the quote colour the way the reader shows them
+  g.font = `${size}px ${fam}`;
+  let y = top + Math.max(0, (bottom - top - total) / 2) + size;
+  // a short accent bar sits just above the passage
+  g.fillStyle = c.quote; roundedRect(g, padX, y - size * 2.05, 72, 7, 3.5); g.fill();
+  const stack = [];
+  const qbg = parseColor(c.quoteBg); const hasQbg = qbg && qbg[3] > 0;
+  for (let pk = 0; pk < layout.length; pk++) {
+    for (const line of layout[pk]) {
+      let x = padX, run = '', runQ = null;
+      const paint = () => {
+        if (!run) return;
+        const w = g.measureText(run).width;
+        if (runQ && hasQbg) { g.fillStyle = c.quoteBg; roundedRect(g, x - 4, y - size * 1.02, w + 8, size * 1.42, size * 0.3); g.fill(); }
+        g.fillStyle = runQ ? c.quote : c.text; g.fillText(run, x, y); x += w; run = '';
+      };
+      for (const ch of line) {
+        let q = stack.length > 0;
+        if (stack.length && ch === stack[stack.length - 1]) { stack.pop(); q = true; }
+        else if (ch === '"' || OPENERS[ch]) { stack.push(ch === '"' ? '"' : OPENERS[ch]); q = true; }
+        if (runQ !== null && q !== runQ) paint();
+        runQ = q; run += ch;
+      }
+      paint();
+      y += lh;
+    }
+    y += gap;
+  }
+  if (CARD.meta) {
+    const fy = H - m - footH + 44;
+    g.strokeStyle = c.uiBorder; g.lineWidth = 2; g.beginPath(); g.moveTo(padX, fy); g.lineTo(W - padX, fy); g.stroke();
+    g.fillStyle = c.heading; g.font = `600 38px ${hfam}`;
+    g.fillText(fitLine(g, `《${CARD.title}》`, boxW), padX, fy + 70);
+    g.fillStyle = c.italic; g.font = `30px ${fam}`;
+    g.fillText(fitLine(g, [CARD.author, CARD.chap].filter(Boolean).join(' · '), boxW), padX, fy + 122);
+  }
+}
+function openCard() {
+  if (!lastSel || !lastSel.text) { toast('先長按選取一段文字，再按「做成小卡」'); return; }
+  let text = lastSel.text;
+  if ([...text].length > 500) { text = [...text].slice(0, 500).join('') + '……'; toast('選得有點長，小卡只放前 500 字'); }
+  Object.assign(CARD, { text, title: R.book ? R.book.title : '', author: R.book ? (R.book.author || '') : '', chap: chapLabel() });
+  const sel = $('#card-theme');
+  sel.replaceChildren(h('option', { value: 'cur', text: '跟現在一樣' }),
+    ...PRESETS.map((p, i) => h('option', { value: 'p:' + i, text: p.name })),
+    ...S.user.map((u, i) => h('option', { value: 'u:' + i, text: u.name + '（我的）' })));
+  sel.value = [...sel.options].some(o => o.value === CARD.theme) ? CARD.theme : 'cur';
+  CARD.theme = sel.value;
+  $('#card-meta').checked = CARD.meta;
+  $$('#card-ratio button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.r === CARD.ratio)));
+  clearSel();
+  $('#card-dlg').hidden = false;
+  drawCard();
+}
+const closeCard = () => { $('#card-dlg').hidden = true; };
+const cardName = () => `墨頁小卡-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.png`;
+const cardBlob = () => new Promise(r => $('#card-canvas').toBlob(r, 'image/png'));
+const cardBase64 = () => $('#card-canvas').toDataURL('image/png').split(',')[1];
+async function saveCard() {
+  if (APP && APP.saveImage) { try { APP.saveImage(cardName(), cardBase64()); } catch { toast('存檔沒有成功，可以改用「分享」'); } return; }
+  const blob = await cardBlob(); if (!blob) { toast('圖片產生失敗，再試一次看看'); return; }
+  const u = URL.createObjectURL(blob);
+  const a = h('a', { href: u, download: cardName() }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 4000);
+  toast('已下載小卡');
+}
+async function shareCard() {
+  if (APP && APP.shareImage) { try { APP.shareImage(cardName(), cardBase64()); } catch { toast('分享沒有成功'); } return; }
+  const blob = await cardBlob(); if (!blob) { toast('圖片產生失敗，再試一次看看'); return; }
+  const file = new File([blob], cardName(), { type: 'image/png' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+    else toast('這個瀏覽器不能直接分享圖片，請先按「下載圖片」');
+  } catch (e) { if (!e || e.name !== 'AbortError') toast('分享沒有成功'); }
+}
+
 /* ---------- drawer / panel ---------- */
-function openDrawer(tab) {
+function openDrawer(tab, editId) {
   $('#drawer').hidden = false; $('#scrim').hidden = false;
   $$('[data-dtab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.dtab === tab)));
   $$('[data-dpane]').forEach(p => { p.hidden = p.dataset.dpane !== tab; });
   if (tab === 'shelf') renderShelf();
+  else if (tab === 'marks') renderMarks(editId);
   else { const cur = $('#toc-list [aria-current="true"]'); if (cur) cur.scrollIntoView({ block: 'center' }); }
 }
 function closeDrawer() { $('#drawer').hidden = true; $('#scrim').hidden = true; }
@@ -1649,12 +2001,12 @@ vp.addEventListener('wheel', e => {
 }, { passive: true });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (!popEl.hidden) closePop(); else if (!$('#drawer').hidden) closeDrawer(); else if (app.classList.contains('immersive')) toggleImmersive();
+    if (!$('#card-dlg').hidden) closeCard(); else if (!popEl.hidden) closePop(); else if (!$('#drawer').hidden) closeDrawer(); else if (app.classList.contains('immersive')) toggleImmersive();
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof HTMLElement) || e.target.closest('input, textarea, select')) return;
   if (e.key === ' ' && e.target.closest('button, summary, a')) return;
-  if (!$('#drawer').hidden || !popEl.hidden || !R.book) return;
+  if (!$('#drawer').hidden || !popEl.hidden || !$('#card-dlg').hidden || !R.book) return;
   if (paged()) {
     if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); nextPage(); }
     else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); prevPage(); }
@@ -1683,6 +2035,20 @@ $('#progress').addEventListener('change', e => {
   if (i === R.idx) { setFrac(v - i); savePos(); } else show(i, { frac: v - i });
 });
 $('#btn-open').addEventListener('click', () => $('#file-epub').click());
+$('#btn-mark').addEventListener('click', () => addMark(false));
+$('#btn-addmark').addEventListener('click', () => { closeDrawer(); addMark(false); });
+$('#sel-mark').addEventListener('click', () => addMark(true));
+$('#sel-card').addEventListener('click', openCard);
+$('#card-close').addEventListener('click', closeCard);
+$('#card-dlg').addEventListener('click', e => { if (e.target === $('#card-dlg')) closeCard(); });
+$('#card-theme').addEventListener('change', e => { CARD.theme = e.target.value; drawCard(); });
+$('#card-meta').addEventListener('change', e => { CARD.meta = e.target.checked; drawCard(); });
+$$('#card-ratio button').forEach(b => b.addEventListener('click', () => {
+  CARD.ratio = +b.dataset.r; $$('#card-ratio button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); drawCard();
+}));
+$('#card-save').addEventListener('click', saveCard);
+$('#card-share').addEventListener('click', shareCard);
+if (!APP) $('#card-save').textContent = '下載圖片';
 $('#file-epub').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; openFile(f); });
 $('#theme-save').addEventListener('click', saveTheme);
 $('#theme-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveTheme(); });
@@ -1774,6 +2140,8 @@ async function takeAppFile() {
 }
 window.__moyeIncoming = async () => { const f = await takeAppFile(); if (f) openFile(f); };
 window.__moyeBack = () => {
+  if (!$('#card-dlg').hidden) { closeCard(); return true; }
+  if (!$('#sel-bar').hidden) { clearSel(); return true; }
   if (!popEl.hidden) { closePop(); return true; }
   if (!$('#drawer').hidden) { closeDrawer(); return true; }
   if (!$('#panel').hidden) { setPanel(false); return true; }

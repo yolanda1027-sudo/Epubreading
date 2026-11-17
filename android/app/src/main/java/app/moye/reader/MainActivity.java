@@ -2,12 +2,17 @@ package app.moye.reader;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.provider.OpenableColumns;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
@@ -21,6 +26,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -29,6 +35,8 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +57,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private volatile Uri pendingUri;
     private volatile String pendingName = "";
-    private String pendingSave;
+    private byte[] pendingSave;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -193,14 +201,14 @@ public class MainActivity extends Activity {
             if (fileCallback != null) fileCallback.onReceiveValue(picked == null ? null : new Uri[]{picked});
             fileCallback = null;
         } else if (requestCode == REQ_SAVE) {
-            String text = pendingSave;
+            byte[] bytes = pendingSave;
             pendingSave = null;
             Uri target = resultCode == RESULT_OK && data != null ? data.getData() : null;
-            if (target == null || text == null) return;
+            if (target == null || bytes == null) return;
             boolean ok = false;
             try (OutputStream out = getContentResolver().openOutputStream(target)) {
                 if (out != null) {
-                    out.write(text.getBytes(StandardCharsets.UTF_8));
+                    out.write(bytes);
                     ok = true;
                 }
             } catch (Exception ignored) {
@@ -274,11 +282,80 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void saveText(String name, String text) {
+            saveWithPicker(name, "application/json", text.getBytes(StandardCharsets.UTF_8));
+        }
+
+        /** A quote card: straight into the photo gallery (Pictures/墨頁) where the system allows it. */
+        @JavascriptInterface
+        public void saveImage(String name, String base64) {
+            final byte[] data;
+            try {
+                data = Base64.decode(base64, Base64.DEFAULT);
+            } catch (Exception e) {
+                toast(R.string.save_failed);
+                return;
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                saveWithPicker(name, "image/png", data);
+                return;
+            }
+            boolean ok = false;
+            try {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.Images.Media.DISPLAY_NAME, name);
+                v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                v.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/墨頁");
+                Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                if (uri != null) {
+                    try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                        if (out != null) {
+                            out.write(data);
+                            ok = true;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            toast(ok ? R.string.card_saved : R.string.save_failed);
+        }
+
+        @JavascriptInterface
+        public void shareImage(String name, String base64) {
+            try {
+                byte[] data = Base64.decode(base64, Base64.DEFAULT);
+                File dir = new File(getCacheDir(), "cards");
+                if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException();
+                File[] old = dir.listFiles();
+                if (old != null) for (File f : old) //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                File file = new File(dir, name.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                try (FileOutputStream out = new FileOutputStream(file)) {
+                    out.write(data);
+                }
+                Uri uri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".fileprovider", file);
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("image/png");
+                send.putExtra(Intent.EXTRA_STREAM, uri);
+                send.setClipData(ClipData.newRawUri("", uri));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                runOnUiThread(() -> {
+                    try {
+                        startActivity(Intent.createChooser(send, getString(R.string.share_card)));
+                    } catch (ActivityNotFoundException e) {
+                        toast(R.string.share_failed);
+                    }
+                });
+            } catch (Exception e) {
+                toast(R.string.share_failed);
+            }
+        }
+
+        private void saveWithPicker(String name, String mime, byte[] data) {
             runOnUiThread(() -> {
-                pendingSave = text;
+                pendingSave = data;
                 Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 save.addCategory(Intent.CATEGORY_OPENABLE);
-                save.setType("application/json");
+                save.setType(mime);
                 save.putExtra(Intent.EXTRA_TITLE, name);
                 try {
                     startActivityForResult(save, REQ_SAVE);
@@ -287,6 +364,10 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this, R.string.save_failed, Toast.LENGTH_SHORT).show();
                 }
             });
+        }
+
+        private void toast(int res) {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, res, Toast.LENGTH_SHORT).show());
         }
     }
 }
