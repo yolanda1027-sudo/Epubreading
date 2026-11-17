@@ -24,7 +24,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- 從檔案管理員「開啟」EPUB -->
+            <!-- 從檔案管理員「開啟」EPUB 或 TXT -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -32,9 +32,10 @@
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
 
-            <!-- 從「分享」選單送 EPUB 進來 -->
+            <!-- 從「分享」選單送 EPUB 進來（TXT 不加：分享文字或網址也是 text/plain，會讓墨頁出現在所有分享選單裡） -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

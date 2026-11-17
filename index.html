@@ -206,8 +206,8 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
     </div>
     <div class="drawer-body" data-dpane="toc"><ul class="toc" id="toc-list"></ul></div>
     <div class="drawer-body" data-dpane="shelf" hidden>
-      <button class="btn primary" id="btn-open" style="width:100%">開啟 EPUB 檔案</button>
-      <p class="hint">也可以直接把 .epub 檔拖進視窗。開過的書會留在這個瀏覽器裡，方便下次接著看；清除網站資料後就會消失，原檔請自己留著。</p>
+      <button class="btn primary" id="btn-open" style="width:100%">開啟 EPUB／TXT 檔案</button>
+      <p class="hint">也可以直接把 .epub 或 .txt 檔拖進視窗。TXT 會自動找「第○章」分章；酒館匯出的聊天紀錄會一則一章。開過的書會留在這個瀏覽器裡，方便下次接著看；清除網站資料後就會消失，原檔請自己留著。</p>
       <div class="shelf" id="shelf-list"></div>
     </div>
   </aside>
@@ -273,9 +273,10 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
             <option value="off">完全不用書本樣式</option>
           </select>
         </div>
+        <label class="check"><input type="checkbox" id="set-txtmd"><span>TXT：<code>*星號*</code> 包住的字當斜體、<code>**雙星號**</code> 當粗體（跟酒館一樣）</span></label>
         <label class="check"><input type="checkbox" id="set-swipe"><span>捲動模式下，手指左右滑動換上一章／下一章</span></label>
         <label class="check"><input type="checkbox" id="set-quotes"><span>引號裡的文字套用「引號」的顏色和底色（「」『』“” ""）</span></label>
-        <p class="hint">分頁模式：點畫面左右兩側或按方向鍵翻頁，點中間收起／叫回工具列。</p>
+        <p class="hint">TXT 原本行首的空白會拿掉，想要縮排請到「文字」調「首行縮排」。<br>分頁模式：點畫面左右兩側或按方向鍵翻頁，點中間收起／叫回工具列。</p>
       </section>
 
       <section data-pane="css" hidden>
@@ -288,7 +289,7 @@ textarea{width:100%;min-height:150px;font-family:ui-monospace,"SF Mono",Menlo,Co
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <div id="drop-hint" hidden>放開就打開這本書</div>
-  <input type="file" id="file-epub" accept=".epub,application/epub+zip" hidden>
+  <input type="file" id="file-epub" accept=".epub,application/epub+zip,.txt,text/plain" hidden>
   <input type="file" id="file-theme" accept=".json,application/json" hidden>
   <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" hidden>
 </div>
@@ -429,7 +430,7 @@ function normTheme(t) {
 }
 let S = LS.get('moye.state', null);
 if (!S || typeof S !== 'object') S = {};
-S.settings = { mode: 'scroll', bookCss: 'theme', quotes: true, swipe: true, ...(S.settings || {}) };
+S.settings = { mode: 'scroll', bookCss: 'theme', quotes: true, swipe: true, txtMarkup: true, ...(S.settings || {}) };
 S.user = Array.isArray(S.user) ? S.user.map(normTheme).filter(t => t.name) : [];
 if (S.cur) { S.cur = normTheme(S.cur); S.auto = !!S.auto; }
 else { S.cur = normTheme({ colors: autoPreset().colors }); S.active = autoPreset().name; S.auto = true; }
@@ -481,6 +482,10 @@ td,th{border:1px solid color-mix(in srgb,var(--r-text) 25%,transparent);padding:
 ul,ol{padding-left:1.6em}
 ::selection{background:color-mix(in srgb,var(--r-quote) 32%,transparent)}
 .bk-fn{display:none}
+details.reasoning,details.swipe{margin:.9em 0;padding:.35em .9em;border-radius:10px}
+details.reasoning > summary,details.swipe > summary{cursor:pointer;font-size:.9em;padding:.2em 0}
+details.reasoning details.reasoning{margin:.4em 0}
+.bk-speaker{margin-top:1.4em}
 .bk-noteref{text-decoration:none;font-size:.85em}
 .bk-msg{color:color-mix(in srgb,var(--r-text) 65%,transparent);text-align:center;padding:3em 0}
 :host(.paged) .bk-main{height:100%;column-width:var(--pg-w,600px);column-gap:48px;column-fill:auto}
@@ -652,6 +657,7 @@ function buildControls() {
   $('#set-bookcss').addEventListener('change', e => { S.settings.bookCss = e.target.value; saveState(); rerender(); });
   $('#set-quotes').addEventListener('change', e => { S.settings.quotes = e.target.checked; saveState(); rerender(); });
   $('#set-swipe').addEventListener('change', e => { S.settings.swipe = e.target.checked; saveState(); });
+  $('#set-txtmd').addEventListener('change', e => { S.settings.txtMarkup = e.target.checked; saveState(); if (R.book && R.book.txt) rerender(); });
 }
 function fillFontSelects() {
   const opts = FONTS.map(f => [f.id, f.label]).concat([...uploaded.keys()].map(n => ['up:' + n, `${n}（上傳的字型）`]));
@@ -672,7 +678,7 @@ function syncControls() {
   $('#f-custom').value = t.fontCustom; $('#f-custom-row').hidden = t.font !== 'custom';
   $('#f-align').value = t.align;
   $('#css-text').value = t.css;
-  $('#set-bookcss').value = S.settings.bookCss; $('#set-quotes').checked = !!S.settings.quotes; $('#set-swipe').checked = !!S.settings.swipe;
+  $('#set-bookcss').value = S.settings.bookCss; $('#set-quotes').checked = !!S.settings.quotes; $('#set-swipe').checked = !!S.settings.swipe; $('#set-txtmd').checked = !!S.settings.txtMarkup;
   $$('#mode-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.settings.mode)));
   const u = S.user.find(x => x.name === S.active);
   $('#theme-name').value = u ? u.name : '';
@@ -902,6 +908,170 @@ class EpubBook {
   close() { for (const u of this.urls.values()) if (u) URL.revokeObjectURL(u); this.urls.clear(); }
 }
 
+/* ---------- TXT ---------- */
+// Characters that show up constantly in Chinese prose, in both scripts. Text decoded with the wrong
+// encoding turns into rare characters, so the encoding that yields more of these is the right one.
+const COMMON_HAN = new Set([...'的一是不了在人有我他她你們们這这個个中來来上大為为和到以說说時时要就出會会可也對对能而子那得於于著着下自之過过後后裡里看道沒没去還还']);
+function decodeText(buf) {
+  const u8 = new Uint8Array(buf);
+  if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) return new TextDecoder('utf-8').decode(u8.subarray(3));
+  if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder('utf-16le').decode(u8.subarray(2));
+  if (u8[0] === 0xFE && u8[1] === 0xFF) return new TextDecoder('utf-16be').decode(u8.subarray(2));
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u8); } catch {}
+  const sample = u8.subarray(0, 300000);
+  let best = 'gb18030', bestScore = -Infinity;
+  for (const enc of ['gb18030', 'big5']) {
+    let t;
+    try { t = new TextDecoder(enc).decode(sample); } catch { continue; }
+    let score = 0;
+    for (const ch of t) { if (COMMON_HAN.has(ch)) score++; else if (ch === '�') score -= 5; }
+    if (score > bestScore) { bestScore = score; best = enc; }
+  }
+  return new TextDecoder(best).decode(u8);
+}
+function looksLikeText(buf) {
+  const u8 = new Uint8Array(buf, 0, Math.min(8192, buf.byteLength));
+  if ((u8[0] === 0xFF && u8[1] === 0xFE) || (u8[0] === 0xFE && u8[1] === 0xFF)) return true;
+  let ctrl = 0;
+  for (const b of u8) { if (b === 0) return false; if (b < 9 || (b > 13 && b < 32)) ctrl++; }
+  return ctrl < u8.length * 0.01;
+}
+
+const TXT_HEAD_RE = /^[ \t　]*((?:第[\d０-９零〇一二三四五六七八九十百千萬万两兩]+[章回節节卷集部篇幕話话](?:[ \t　:：、.．·・\-—_]*\S.{0,40})?)|(?:序章|序言|序|楔子|引子|前言|尾聲|尾声|後記|后记|終章|终章|番外)(?:[ \t　:：、.．·・\-—_]*\S.{0,40})?|(?:chapter|Chapter|CHAPTER)[ \t]+[\dIVXLCivxlc]+\b.{0,40})[ \t　]*$/;
+const isTxtHeading = line => line.length <= 60 && TXT_HEAD_RE.test(line) && !/[。！？!?」』”，,]$/.test(line.trim());
+const CHAT_SEP_RE = /^-{20}$/;
+const TXT_CHUNK = 6000;
+
+// Split a plain-text book into chapters: by chapter headings, by a chat export's message
+// separators, or (when neither is there) into evenly sized parts at line breaks.
+function splitTxt(text) {
+  let title = '', author = '';
+  // Header written by Chat2Ebook's TXT export
+  const hd = /^\s*={10,}\n[ \t]*(.+?)[ \t]*\n[ \t]*By[ \t]*(.*?)[ \t]*\n={10,}[\s\S]*?【正文[开開]始】[^\n]*\n/.exec(text);
+  if (hd) { title = hd[1].trim(); author = hd[2].trim(); text = text.slice(hd[0].length); }
+  const lines = text.split('\n');
+  const chapters = [];
+
+  const seps = lines.reduce((n, l) => n + (CHAT_SEP_RE.test(l.trim()) ? 1 : 0), 0);
+  if (seps >= 2) {
+    let buf = [];
+    const flush = () => {
+      const body = buf.join('\n').trim();
+      buf = [];
+      if (!body) return;
+      const m = /^(.{1,40})[:：]\s*$/.exec(body.split('\n')[0].trim());
+      const n = chapters.length + 1;
+      chapters.push({ title: m ? `第 ${n} 則 · ${m[1]}` : `第 ${n} 則`, body, kind: 'chat' });
+    };
+    for (const l of lines) { if (CHAT_SEP_RE.test(l.trim())) flush(); else buf.push(l); }
+    flush();
+    return { title, author, chapters, mode: 'chat' };
+  }
+
+  const heads = [];
+  lines.forEach((l, i) => { if (isTxtHeading(l)) heads.push(i); });
+  if (heads.length >= 2) {
+    const pre = lines.slice(0, heads[0]).join('\n').trim();
+    if (pre.replace(/\s/g, '').length > 20) chapters.push({ title: '開頭', body: pre, kind: 'plain' });
+    heads.forEach((h, k) => {
+      const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
+      chapters.push({ title: lines[h].trim(), body: lines.slice(h + 1, end).join('\n'), kind: 'chapter' });
+    });
+    return { title, author, chapters, mode: 'chapter' };
+  }
+
+  let buf = [], size = 0;
+  const flush = () => {
+    const body = buf.join('\n').trim();
+    buf = []; size = 0;
+    if (body) chapters.push({ title: `第 ${chapters.length + 1} 部分`, body, kind: 'plain' });
+  };
+  for (const l of lines) {
+    buf.push(l); size += l.length + 1;
+    if (size >= TXT_CHUNK && !l.trim()) flush();
+    else if (size >= TXT_CHUNK * 1.6) flush();
+  }
+  flush();
+  if (!chapters.length) chapters.push({ title: '第 1 部分', body: '', kind: 'plain' });
+  return { title, author, chapters, mode: 'plain' };
+}
+
+const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function txtInline(line) {
+  let s = escHtml(line);
+  if (S.settings.txtMarkup) {
+    s = s.replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+         .replace(/(^|[^*])\*(?![\s*])([^*\n]+?)(?<![\s*])\*(?!\*)/g, '$1<em>$2</em>');
+  }
+  return s;
+}
+function txtParas(lines) {
+  let out = '';
+  for (const raw of lines) {
+    const line = raw.replace(/^[ \t　 ]+|[ \t　 ]+$/g, '');
+    if (!line) continue;
+    if (/^[*＊\-—─=~～·•_ ]{3,}$/.test(line) && !/[^\s*＊\-—─=~～·•_]/.test(line)) { out += '<hr/>'; continue; }
+    out += `<p>${txtInline(line)}</p>`;
+  }
+  return out;
+}
+// A chat export also carries reasoning (【思维链】…【思维链结束】) and other swipes (【其他版本 N / M】).
+function txtChatBody(lines) {
+  let out = '', buf = [];
+  const flush = () => { out += txtParas(buf); buf = []; };
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^【思[维維][链鏈]】$/.test(t)) {
+      flush();
+      let j = i + 1; const inner = [];
+      while (j < lines.length && !/^【思[维維][链鏈][结結]束】$/.test(lines[j].trim())) inner.push(lines[j++]);
+      out += `<details class="reasoning"><summary>💭 思維鏈</summary>${txtParas(inner)}</details>`;
+      i = j;
+    } else if (/^【其他版本\s*\d+\s*\/\s*\d+】$/.test(t)) {
+      flush();
+      let j = i + 1; const inner = [];
+      while (j < lines.length && !/^【其他版本\s*\d+\s*\/\s*\d+】$/.test(lines[j].trim())) inner.push(lines[j++]);
+      out += `<details class="swipe"><summary>🔀 ${escHtml(t.slice(1, -1))}</summary>${txtChatBody(inner)}</details>`;
+      i = j - 1;
+    } else buf.push(lines[i]);
+  }
+  flush();
+  return out;
+}
+function renderTxtChapter(c) {
+  const lines = c.body.split('\n');
+  if (c.kind === 'chat') {
+    let out = '';
+    const m = lines.length && /^(.{1,40})[:：]\s*$/.exec(lines[0].trim());
+    if (m) { out += `<p class="bk-speaker"><strong>${escHtml(m[1])}：</strong></p>`; lines.shift(); }
+    return out + txtChatBody(lines);
+  }
+  return (c.kind === 'chapter' || c.title === '開頭' ? `<h2>${escHtml(c.title)}</h2>` : '') + txtParas(lines);
+}
+function makeTxtBook(buf, fileName) {
+  const parts = splitTxt(decodeText(buf).replace(/\r\n?/g, '\n'));
+  return {
+    txt: true, html: true,
+    title: parts.title || (fileName || '未命名').replace(/\.txt$/i, ''),
+    author: parts.author,
+    chapters: parts.chapters,
+    spine: parts.chapters.map((c, i) => ({ path: 't' + i })),
+    toc: parts.chapters.map((c, i) => ({ label: c.title, path: 't' + i, frag: '', kids: [] })),
+    async text(p) { const c = this.chapters[+String(p).slice(1)]; return c ? renderTxtChapter(c) : null; },
+    async url() { return null; },
+    cssCache: new Map(),
+    close() {},
+  };
+}
+// One entry point for both formats: an EPUB is a zip archive, anything else that reads as text is a TXT.
+async function openAnyBook(buf, fileName) {
+  const head = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+  const isZip = head[0] === 0x50 && head[1] === 0x4B;
+  if (isZip || /\.epub$/i.test(fileName || '')) return EpubBook.open(buf, fileName);
+  if (/\.txt$/i.test(fileName || '') || looksLikeText(buf)) return makeTxtBook(buf, fileName);
+  throw new Error('目前支援 EPUB 和 TXT 檔，這個檔案兩種都不像');
+}
+
 /* built-in sample so the page opens in a working state */
 const SAMPLE = {
   id: 'sample', sample: true, html: true, title: '示範書：先試試換主題', author: '閱讀器內建的範例文字',
@@ -937,7 +1107,7 @@ const SAMPLE = {
 <p>「那酒館主題裡的自訂 CSS 呢？」</p>
 <p>「那是寫給酒館介面用的，搬過來也對不上，所以不會帶進來。」</p>`,
     c3: `<h1>打開你自己的書</h1>
-<p>按左上角的「書架」，選「開啟 EPUB 檔案」；或是直接把 .epub 檔拖進這個視窗。</p>
+<p>按左上角的「書架」，選「開啟 EPUB／TXT 檔案」；或是直接把檔案拖進這個視窗。TXT 也會照主題顯示，引號一樣會上色。</p>
 <p>開過的書會留在這個瀏覽器的書架上，下次回來會從上次讀到的地方接著看。書架上的書只存在你這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
 <h2>幾個小操作</h2>
 <ul>
@@ -1328,13 +1498,13 @@ async function openBook(book) {
 }
 async function openFile(file) {
   if (!file) return;
-  toast('正在打開《' + file.name.replace(/\.epub$/i, '') + '》…', 15000);
+  toast('正在打開《' + file.name.replace(/\.(epub|txt)$/i, '') + '》…', 15000);
   try {
     const buf = await file.arrayBuffer();
-    const book = await EpubBook.open(buf, file.name);
+    const book = await openAnyBook(buf, file.name);
     book.id = hashId(book.title + '|' + book.author + '|' + buf.byteLength);
     await idb('books', 'readwrite', s => s.put({ id: book.id, title: book.title, author: book.author, cover: book.cover || null, added: Date.now(), size: buf.byteLength }));
-    await idb('data', 'readwrite', s => s.put({ id: book.id, buf }));
+    await idb('data', 'readwrite', s => s.put({ id: book.id, buf, name: file.name }));
     await openBook(book);
     closeDrawer();
     toast(`已打開《${book.title}》`);
@@ -1346,7 +1516,7 @@ async function openStored(id) {
   const metaRec = await idb('books', 'readonly', s => s.get(id));
   if (!rec || !rec.buf) return false;
   try {
-    const book = await EpubBook.open(rec.buf, (metaRec && metaRec.title) || '');
+    const book = await openAnyBook(rec.buf, rec.name || (metaRec && metaRec.title) || '');
     book.id = id;
     await openBook(book);
     return true;

@@ -19,9 +19,9 @@
     "action": "./share",
     "method": "POST",
     "enctype": "multipart/form-data",
-    "params": { "files": [ { "name": "book", "accept": ["application/epub+zip", ".epub"] } ] }
+    "params": { "files": [ { "name": "book", "accept": ["application/epub+zip", ".epub", "text/plain", ".txt"] } ] }
   },
   "file_handlers": [
-    { "action": "./", "accept": { "application/epub+zip": [".epub"] } }
+    { "action": "./", "accept": { "application/epub+zip": [".epub"], "text/plain": [".txt"] } }
   ]
 }
