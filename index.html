@@ -1706,7 +1706,7 @@ function renderMarks(editId) {
   for (const m of arr) {
     const go = h('button', { class: 'mark-go', type: 'button' },
       h('span', { class: 'mark-chap', text: m.chap || `第 ${m.i + 1} 節` }),
-      h('span', { class: 'mark-snip' + (m.sel ? ' sel' : ''), text: m.snip ? (m.sel ? `「${m.snip}」` : m.snip) : '（這個位置沒有文字）' }));
+      h('span', { class: 'mark-snip' + (m.sel ? ' sel' : ''), text: m.snip || '（這個位置沒有文字）' }));
     go.addEventListener('click', () => gotoMark(m));
     const noteView = h('p', { class: 'mark-note', text: m.note || '' });
     noteView.hidden = !m.note;
